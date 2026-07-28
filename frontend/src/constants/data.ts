@@ -18,7 +18,7 @@ export const RESET_CARDS: Record<string, { quote: string; tip: string; focus: st
   },
   Balanced: {
     quote: 'My progress shines even in silence.',
-    tip: 'Acknowledge your nervous system's wisdom in finding center. Continue with mindful intention.',
+    tip: "Acknowledge your nervous system's wisdom in finding center. Continue with mindful intention.",
     focus: 'Self-Compassion · Regulation',
   },
   Joyful: {
@@ -63,7 +63,7 @@ export const DEFAULT_AFFIRMATIONS = [
   'My progress shines even in silence.',
   'I set boundaries with love and strength.',
   'I am worthy of all the good things coming my way.',
-  'I honor my body's wisdom in every moment.',
+  "I honor my body's wisdom in every moment.",
   'I choose calm over chaos, again and again.',
   'I release what no longer serves me.',
   'My healing is happening, even when I cannot see it.',

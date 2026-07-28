@@ -1,189 +1,169 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
+  StatusBar,
 } from 'react-native';
-import { PageHeader } from '../src/components/PageHeader';
+import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../src/constants/colors';
-import { MOODS, RESET_CARDS } from '../src/constants/data';
-import { api } from '../src/services/api';
 
-export default function ResetToolkit() {
-  const [selected, setSelected] = useState<{
-    label: string;
-    emoji: string;
-    color: string;
-  } | null>(null);
-  const [card, setCard] = useState<{
-    quote: string;
-    tip: string;
-    focus: string;
-  } | null>(null);
-  const [aiCard, setAiCard] = useState<string>('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [moodHistory, setMoodHistory] = useState<
-    Array<{ mood: string; color: string }>
-  >([]);
+const FEATURES = [
+  {
+    id: 'reset',
+    icon: '🌿',
+    title: 'Reset Toolkit',
+    subtitle: 'Somatic mood reset with AI guidance',
+    color: '#78C5A0',
+    gradient: ['#134E48', '#78C5A0'],
+  },
+  {
+    id: 'journal',
+    icon: '📓',
+    title: 'Daily Journal',
+    subtitle: 'Grounded thoughts & reflections',
+    color: '#E8835A',
+    gradient: ['#8B3A1A', '#E8835A'],
+  },
+  {
+    id: 'notes',
+    icon: '🧠',
+    title: '143 Life Notes℠',
+    subtitle: 'Wisdom you gather along the way',
+    color: '#D4A843',
+    gradient: ['#8B7614', '#F0C96A'],
+  },
+  {
+    id: 'quotes',
+    icon: '🦋',
+    title: 'Quote Cards',
+    subtitle: 'Beautiful visual affirmations',
+    color: '#A8A0C8',
+    gradient: ['#5C4E8C', '#A8A0C8'],
+  },
+  {
+    id: 'planner',
+    icon: '📋',
+    title: 'Boss Mode Planner℠',
+    subtitle: 'Task management with intention',
+    color: '#5BB8D4',
+    gradient: ['#1E5F73', '#5BB8D4'],
+  },
+  {
+    id: 'declutter',
+    icon: '🧹',
+    title: 'Declutter Tools',
+    subtitle: 'Clear space + meditation timer',
+    color: '#78C5A0',
+    gradient: ['#2D5F4C', '#78C5A0'],
+  },
+  {
+    id: 'affirmations',
+    icon: '⏰',
+    title: 'Daily Affirmations',
+    subtitle: '2:43 PM sacred reminders',
+    color: '#F0C96A',
+    gradient: ['#8B7614', '#F0C96A'],
+  },
+  {
+    id: 'feedback',
+    icon: '💌',
+    title: 'Share Feedback',
+    subtitle: 'Your voice shapes this space',
+    color: '#E8835A',
+    gradient: ['#8B3A1A', '#E8835A'],
+  },
+];
 
-  useEffect(() => {
-    loadMoodHistory();
-  }, []);
+export default function HomeScreen() {
+  const router = useRouter();
 
-  const loadMoodHistory = async () => {
-    try {
-      const data = await api.getMoodHistory();
-      setMoodHistory(data.slice(0, 7));
-    } catch (error) {
-      console.error('Failed to load mood history:', error);
-    }
-  };
-
-  const generate = async () => {
-    if (!selected) return;
-
-    setCard(RESET_CARDS[selected.label]);
-    setAiLoading(true);
-    setAiCard('');
-
-    try {
-      // Save mood to history
-      await api.createMoodEntry(selected.label, selected.color);
-      await loadMoodHistory();
-
-      // Get AI-generated reset
-      const response = await api.generateAIReset(selected.label);
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-
-      if (reader) {
-        let fullText = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value);
-          const lines = chunk.split('\\n');
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6);
-              if (data === '[DONE]') {
-                break;
-              }
-              fullText += data;
-              setAiCard(fullText);
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Failed to generate reset:', error);
-    }
-    setAiLoading(false);
-  };
+  const today = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
 
   return (
-    <View style={styles.container}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-        <PageHeader
-          icon="🌿"
-          title="Reset Toolkit"
-          subtitle="Select your current emotional state and receive a somatic reset card to help you return to center."
-        />
-
-        {moodHistory.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>Recent Mood Tracking</Text>
-            <View style={styles.moodHistory}>
-              {moodHistory.map((m, i) => (
-                <View key={i} style={styles.moodDot}>
-                  <View
-                    style={[
-                      styles.dot,
-                      { backgroundColor: m.color },
-                    ]}
-                  />
-                  <Text style={styles.moodLabel}>{m.mood}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-
-        <View style={styles.moodGrid}>
-          {MOODS.map((m) => (
-            <TouchableOpacity
-              key={m.label}
-              onPress={() => setSelected(m)}
-              style={[
-                styles.moodButton,
-                selected?.label === m.label && {
-                  backgroundColor: `${m.color}28`,
-                  borderColor: m.color,
-                },
-              ]}
-            >
-              <Text style={styles.moodEmoji}>{m.emoji}</Text>
-              <Text
-                style={[
-                  styles.moodText,
-                  selected?.label === m.label && { color: m.color },
-                ]}
-              >
-                {m.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <TouchableOpacity
-          onPress={generate}
-          disabled={!selected}
-          style={[
-            styles.generateButton,
-            !selected && { opacity: 0.45 },
-          ]}
+    <View style={styles.container} testID="home-screen">
+      <StatusBar barStyle="light-content" />
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.generateButtonText}>✦ Generate My Reset Card</Text>
-        </TouchableOpacity>
-
-        {card && (
-          <View style={[styles.card, { borderColor: 'rgba(212,168,67,0.35)' }]}>
-            <Text style={styles.resetHeader}>
-              {selected?.emoji} {selected?.label} · DBT-Somatic Reset
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.brandText}>BossLadyLisa's℠</Text>
+            <Text style={styles.titleLine1}>BEAUTIFY</Text>
+            <Text style={styles.titleLine2}>Yourself</Text>
+            <Text style={styles.titleLine3}>AND BEYOND</Text>
+            <View style={styles.dividerLine} />
+            <Text style={styles.tagline}>
+              This is where you Beautify Yourself on the inside
             </Text>
-            <Text style={styles.quote}>"{card.quote}"</Text>
-            <Text style={styles.tip}>{card.tip}</Text>
-            <View style={styles.focusContainer}>
-              {card.focus.split(' · ').map((f) => (
-                <View key={f} style={styles.focusTag}>
-                  <Text style={styles.focusText}>✦ {f}</Text>
+            <Text style={styles.dateText}>{today}</Text>
+          </View>
+
+          {/* Dragonfly quote card */}
+          <View style={styles.quoteCard} testID="daily-quote-card">
+            <Text style={styles.dragonflyIcon}>🦋</Text>
+            <Text style={styles.quoteText}>
+              "Because I can be the peace the world needs to feel."
+            </Text>
+            <Text style={styles.quoteAttribution}>
+              We'll keep the light on for you.
+            </Text>
+          </View>
+
+          {/* Feature Cards Grid */}
+          <Text style={styles.sectionTitle}>Your Sanctuary Tools</Text>
+
+          <View style={styles.cardsGrid}>
+            {FEATURES.map((feature) => (
+              <TouchableOpacity
+                key={feature.id}
+                testID={`feature-card-${feature.id}`}
+                style={[
+                  styles.featureCard,
+                  { borderColor: `${feature.color}55` },
+                ]}
+                onPress={() => router.push(`/${feature.id}` as any)}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={[
+                    styles.iconContainer,
+                    { backgroundColor: `${feature.color}22` },
+                  ]}
+                >
+                  <Text style={styles.featureIcon}>{feature.icon}</Text>
                 </View>
-              ))}
-            </View>
+                <View style={styles.cardContent}>
+                  <Text style={[styles.cardTitle, { color: feature.color }]}>
+                    {feature.title}
+                  </Text>
+                  <Text style={styles.cardSubtitle}>{feature.subtitle}</Text>
+                </View>
+                <Text style={[styles.arrow, { color: feature.color }]}>›</Text>
+              </TouchableOpacity>
+            ))}
           </View>
-        )}
 
-        {aiLoading && (
-          <View style={styles.loadingCard}>
-            <ActivityIndicator size="large" color={Colors.gold} />
-            <Text style={styles.loadingText}>
-              Channeling your personalized somatic guidance…
+          {/* Footer */}
+          <View style={styles.footer}>
+            <Text style={styles.footerQuote}>
+              "Safety is the soil. Courage is the bloom."
+            </Text>
+            <Text style={styles.footerText}>
+              Beautify Yourself & Beyond℠ · All Are Welcome Here
             </Text>
           </View>
-        )}
-
-        {aiCard && !aiLoading && (
-          <View style={styles.aiCard}>
-            <Text style={styles.aiHeader}>✦ Your Personalized Somatic Guidance</Text>
-            <Text style={styles.aiText}>{aiCard}</Text>
-          </View>
-        )}
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
     </View>
   );
 }
@@ -193,148 +173,156 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.teal,
   },
-  scrollView: {
+  safeArea: {
     flex: 1,
   },
-  content: {
-    padding: 24,
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 40,
   },
-  card: {
-    backgroundColor: Colors.glass,
-    borderWidth: 1,
-    borderColor: Colors.glassBdr,
-    borderRadius: 18,
-    padding: 24,
-    marginBottom: 20,
-  },
-  cardLabel: {
-    fontSize: 11,
-    color: 'rgba(245,237,216,0.45)',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    marginBottom: 10,
-  },
-  moodHistory: {
-    flexDirection: 'row',
-    gap: 10,
-    flexWrap: 'wrap',
-  },
-  moodDot: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  dot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-  },
-  moodLabel: {
-    fontSize: 10,
-    color: 'rgba(245,237,216,0.4)',
-  },
-  moodGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 22,
-  },
-  moodButton: {
-    width: '30%',
-    backgroundColor: Colors.glass,
-    borderWidth: 1,
-    borderColor: Colors.glassBdr,
-    borderRadius: 14,
-    padding: 13,
-    alignItems: 'center',
-  },
-  moodEmoji: {
-    fontSize: 22,
-    marginBottom: 4,
-  },
-  moodText: {
-    fontSize: 12,
-    color: Colors.cream,
-    fontWeight: '600',
-  },
-  generateButton: {
-    backgroundColor: Colors.gold,
-    borderRadius: 30,
-    padding: 12,
+  header: {
     alignItems: 'center',
     marginBottom: 24,
+    paddingTop: 20,
   },
-  generateButtonText: {
-    color: Colors.teal,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  resetHeader: {
+  brandText: {
     fontSize: 11,
+    letterSpacing: 3,
     color: Colors.terraLt,
-    letterSpacing: 2,
     textTransform: 'uppercase',
-    marginBottom: 10,
-  },
-  quote: {
-    fontSize: 24,
-    fontStyle: 'italic',
-    color: Colors.goldLt,
-    lineHeight: 34,
-    marginBottom: 14,
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.terra,
-    paddingLeft: 16,
-  },
-  tip: {
-    color: Colors.cream,
-    fontSize: 14,
-    lineHeight: 22,
     marginBottom: 12,
+    fontWeight: '600',
   },
-  focusContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  focusTag: {
-    backgroundColor: 'rgba(212,168,67,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(212,168,67,0.22)',
-    borderRadius: 20,
-    paddingVertical: 3,
-    paddingHorizontal: 10,
-  },
-  focusText: {
-    fontSize: 11,
+  titleLine1: {
+    fontSize: 42,
+    fontWeight: '700',
     color: Colors.gold,
+    letterSpacing: 4,
+    fontStyle: 'italic',
   },
-  loadingCard: {
-    backgroundColor: Colors.glass,
-    borderRadius: 18,
+  titleLine2: {
+    fontSize: 48,
+    fontWeight: '400',
+    color: Colors.goldLt,
+    fontStyle: 'italic',
+    marginVertical: -8,
+  },
+  titleLine3: {
+    fontSize: 16,
+    letterSpacing: 6,
+    color: Colors.cream,
+    marginTop: 4,
+  },
+  dividerLine: {
+    width: 60,
+    height: 2,
+    backgroundColor: Colors.terra,
+    marginVertical: 16,
+  },
+  tagline: {
+    fontSize: 14,
+    color: Colors.cream,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 20,
+  },
+  dateText: {
+    fontSize: 12,
+    color: 'rgba(245,237,216,0.5)',
+    marginTop: 4,
+  },
+  quoteCard: {
+    backgroundColor: 'rgba(196,98,45,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(212,168,67,0.3)',
+    borderRadius: 20,
     padding: 24,
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 28,
   },
-  loadingText: {
-    color: 'rgba(245,237,216,0.5)',
-    fontSize: 13,
-    marginTop: 12,
+  dragonflyIcon: {
+    fontSize: 32,
+    marginBottom: 12,
   },
-  aiCard: {
-    backgroundColor: Colors.terraDk,
-    borderRadius: 18,
-    padding: 24,
+  quoteText: {
+    fontSize: 16,
+    fontStyle: 'italic',
+    color: Colors.goldLt,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 12,
   },
-  aiHeader: {
+  quoteAttribution: {
     fontSize: 11,
-    color: 'rgba(245,237,216,0.6)',
+    color: Colors.terraLt,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  sectionTitle: {
+    fontSize: 20,
+    color: Colors.goldLt,
+    marginBottom: 16,
+    fontStyle: 'italic',
+    paddingHorizontal: 4,
+  },
+  cardsGrid: {
+    gap: 12,
+  },
+  featureCard: {
+    backgroundColor: Colors.glass,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  iconContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  featureIcon: {
+    fontSize: 26,
+  },
+  cardContent: {
+    flex: 1,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    color: 'rgba(245,237,216,0.55)',
+    lineHeight: 16,
+  },
+  arrow: {
+    fontSize: 28,
+    fontWeight: '300',
+  },
+  footer: {
+    alignItems: 'center',
+    marginTop: 32,
+    paddingTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: Colors.glassBdr,
+  },
+  footerQuote: {
+    fontSize: 13,
+    color: 'rgba(245,237,216,0.4)',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  footerText: {
+    fontSize: 10,
+    color: 'rgba(245,237,216,0.25)',
     letterSpacing: 2,
     textTransform: 'uppercase',
-    marginBottom: 10,
-  },
-  aiText: {
-    color: Colors.cream,
-    fontSize: 14,
-    lineHeight: 24,
   },
 });
