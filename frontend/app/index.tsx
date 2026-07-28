@@ -9,7 +9,9 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../src/constants/colors';
+import { DecorativeBackground } from '../src/components/DecorativeBackground';
 
 const FEATURES = [
   {
@@ -90,6 +92,13 @@ export default function HomeScreen() {
   return (
     <View style={styles.container} testID="home-screen">
       <StatusBar barStyle="light-content" />
+      <LinearGradient
+        colors={['#2d1b3d', '#4a2c5a', '#5a3548', '#A0421F']}
+        style={StyleSheet.absoluteFill}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      />
+      <DecorativeBackground />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -97,30 +106,31 @@ export default function HomeScreen() {
         >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.brandText}>BossLadyLisa's℠</Text>
+            <Text style={styles.brandText}>🦋 BossLadyLisa's℠ 🦋</Text>
             <Text style={styles.titleLine1}>BEAUTIFY</Text>
             <Text style={styles.titleLine2}>Yourself</Text>
             <Text style={styles.titleLine3}>AND BEYOND</Text>
             <View style={styles.dividerLine} />
             <Text style={styles.tagline}>
-              This is where you Beautify Yourself on the inside
+              🌸 This is where you Beautify Yourself on the inside 🌸
             </Text>
             <Text style={styles.dateText}>{today}</Text>
           </View>
 
           {/* Dragonfly quote card */}
           <View style={styles.quoteCard} testID="daily-quote-card">
-            <Text style={styles.dragonflyIcon}>🦋</Text>
+            <Text style={styles.dragonflyIcon}>🦋 ✨ 🦋</Text>
             <Text style={styles.quoteText}>
               "Because I can be the peace the world needs to feel."
             </Text>
             <Text style={styles.quoteAttribution}>
               We'll keep the light on for you.
             </Text>
+            <Text style={styles.quoteFlowers}>🌸 🌼 🌺</Text>
           </View>
 
           {/* Feature Cards Grid */}
-          <Text style={styles.sectionTitle}>Your Sanctuary Tools</Text>
+          <Text style={styles.sectionTitle}>🌿 Your Sanctuary Tools 🌿</Text>
 
           <View style={styles.cardsGrid}>
             {FEATURES.map((feature) => (
@@ -184,6 +194,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
     paddingTop: 20,
+    zIndex: 1,
   },
   brandText: {
     fontSize: 11,
@@ -233,17 +244,19 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   quoteCard: {
-    backgroundColor: 'rgba(196,98,45,0.15)',
+    backgroundColor: 'rgba(232,184,77,0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(212,168,67,0.3)',
+    borderColor: 'rgba(232,184,77,0.4)',
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
     marginBottom: 28,
+    zIndex: 1,
   },
   dragonflyIcon: {
-    fontSize: 32,
+    fontSize: 24,
     marginBottom: 12,
+    letterSpacing: 4,
   },
   quoteText: {
     fontSize: 16,
@@ -258,6 +271,11 @@ const styles = StyleSheet.create({
     color: Colors.terraLt,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
+    marginBottom: 12,
+  },
+  quoteFlowers: {
+    fontSize: 20,
+    letterSpacing: 8,
   },
   sectionTitle: {
     fontSize: 20,
@@ -268,6 +286,7 @@ const styles = StyleSheet.create({
   },
   cardsGrid: {
     gap: 12,
+    zIndex: 1,
   },
   featureCard: {
     backgroundColor: Colors.glass,
