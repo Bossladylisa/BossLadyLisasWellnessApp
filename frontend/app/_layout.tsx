@@ -55,6 +55,8 @@ export default function RootLayout() {
           <Stack.Screen name="declutter" options={{ title: 'Declutter Tools' }} />
           <Stack.Screen name="affirmations" options={{ title: 'Daily Affirmations' }} />
           <Stack.Screen name="feedback" options={{ title: 'Share Feedback' }} />
+          <Stack.Screen name="support" options={{ title: 'Wellness Support' }} />
+          <Stack.Screen name="admin" options={{ title: 'Admin Dashboard' }} />
         </Stack>
       </GestureHandlerRootView>
     </SafeAreaProvider>

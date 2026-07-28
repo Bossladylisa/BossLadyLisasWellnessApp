@@ -40,7 +40,7 @@ const getFeatures = (theme: Theme) => [
   },
   {
     id: 'quotes',
-    icon: '🦋',
+    icon: 'DRAGONFLY',
     title: 'Quote Cards',
     subtitle: 'Beautiful visual affirmations',
     color: theme.terraLt,
@@ -72,6 +72,13 @@ const getFeatures = (theme: Theme) => [
     title: 'Share Feedback',
     subtitle: 'Your voice shapes this space',
     color: theme.terraLt,
+  },
+  {
+    id: 'support',
+    icon: '🤍',
+    title: 'Wellness Support',
+    subtitle: 'You are not in this alone',
+    color: theme.gold,
   },
 ];
 
@@ -165,7 +172,11 @@ export default function HomeScreen() {
                     { backgroundColor: `${feature.color}22` },
                   ]}
                 >
-                  <Text style={styles.featureIcon}>{feature.icon}</Text>
+                  {feature.icon === 'DRAGONFLY' ? (
+                    <DragonflyIcon size={28} color={feature.color} opacity={0.95} />
+                  ) : (
+                    <Text style={styles.featureIcon}>{feature.icon}</Text>
+                  )}
                 </View>
                 <View style={styles.cardContent}>
                   <Text style={[styles.cardTitle, { color: feature.color }]}>
@@ -180,6 +191,25 @@ export default function HomeScreen() {
 
           {/* Footer */}
           <View style={styles.footer}>
+            <TouchableOpacity
+              testID="disclaimer-link"
+              onPress={() => router.push('/support' as any)}
+              style={styles.disclaimerBanner}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.disclaimerBannerIcon}>🤍</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.disclaimerBannerTitle}>
+                  You are not in this alone.
+                </Text>
+                <Text style={styles.disclaimerBannerText}>
+                  This app is a wellness companion — not a substitute for
+                  licensed medical care. Tap for crisis resources.
+                </Text>
+              </View>
+              <Text style={styles.disclaimerBannerArrow}>›</Text>
+            </TouchableOpacity>
+
             <Text style={styles.footerQuote}>
               "Safety is the soil. Courage is the bloom."
             </Text>
@@ -367,6 +397,39 @@ const makeStyles = (theme: Theme) =>
       paddingTop: 24,
       borderTopWidth: 1,
       borderTopColor: theme.glassBdr,
+    },
+    disclaimerBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      backgroundColor: 'rgba(232,184,77,0.1)',
+      borderWidth: 1,
+      borderColor: 'rgba(232,184,77,0.35)',
+      borderRadius: 14,
+      padding: 14,
+      marginBottom: 24,
+      width: '100%',
+    },
+    disclaimerBannerIcon: {
+      fontSize: 22,
+    },
+    disclaimerBannerTitle: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: theme.goldLt,
+      marginBottom: 2,
+      fontStyle: 'italic',
+    },
+    disclaimerBannerText: {
+      fontSize: 11,
+      color: theme.cream,
+      opacity: 0.75,
+      lineHeight: 16,
+    },
+    disclaimerBannerArrow: {
+      fontSize: 22,
+      color: theme.goldLt,
+      fontWeight: '300',
     },
     footerQuote: {
       fontSize: 13,

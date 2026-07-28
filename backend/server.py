@@ -306,6 +306,102 @@ async def update_user_stats(input: UserStatsUpdate):
         "last_affirmation_date": stats.get("last_affirmation_date")
     }
 
+# ==================== ADMIN MODERATION ====================
+
+# Admin password for basic protection (should use proper auth in production)
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "beautify2026admin")
+
+class AdminAuthRequest(BaseModel):
+    password: str
+
+class ModerationAction(BaseModel):
+    password: str
+    reason: Optional[str] = "Moderator removal"
+
+@api_router.post("/admin/verify")
+async def verify_admin(input: AdminAuthRequest):
+    """Verify admin credentials"""
+    if input.password != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+    return {"valid": True, "role": "admin"}
+
+@api_router.get("/admin/stats")
+async def get_admin_stats(password: str):
+    """Get overall app statistics for admin dashboard"""
+    if password != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+    
+    journal_count = await db.journal_entries.count_documents({})
+    notes_count = await db.life_notes.count_documents({})
+    tasks_count = await db.tasks.count_documents({})
+    affirmations_count = await db.affirmations.count_documents({})
+    feedback_count = await db.feedback.count_documents({})
+    mood_count = await db.mood_history.count_documents({})
+    
+    return {
+        "journal_entries": journal_count,
+        "life_notes": notes_count,
+        "tasks": tasks_count,
+        "affirmations": affirmations_count,
+        "feedback": feedback_count,
+        "mood_entries": mood_count,
+        "total_content": journal_count + notes_count + affirmations_count + feedback_count,
+    }
+
+@api_router.get("/admin/feedback")
+async def get_all_feedback_admin(password: str):
+    """View all feedback for moderation"""
+    if password != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+    
+    feedback = await db.feedback.find({}, {"_id": 0}).sort("timestamp", -1).to_list(1000)
+    return feedback
+
+@api_router.delete("/admin/moderate/{content_type}/{item_id}")
+async def moderate_content(content_type: str, item_id: str, password: str, reason: str = "Moderator removal"):
+    """Admin removal of content across collections (feedback, notes, etc.)"""
+    if password != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+    
+    collection_map = {
+        "feedback": db.feedback,
+        "journal": db.journal_entries,
+        "notes": db.life_notes,
+        "affirmations": db.affirmations,
+        "tasks": db.tasks,
+        "community": db.community_blooms,  # For future community section
+    }
+    
+    if content_type not in collection_map:
+        raise HTTPException(status_code=400, detail=f"Unknown content type: {content_type}")
+    
+    collection = collection_map[content_type]
+    
+    # Log the moderation action
+    await db.moderation_log.insert_one({
+        "id": str(uuid.uuid4()),
+        "content_type": content_type,
+        "item_id": item_id,
+        "reason": reason,
+        "timestamp": datetime.utcnow(),
+    })
+    
+    # Delete the item
+    result = await collection.delete_one({"id": item_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    return {"success": True, "message": f"Item removed from {content_type}", "reason": reason}
+
+@api_router.get("/admin/moderation-log")
+async def get_moderation_log(password: str):
+    """View the moderation action log"""
+    if password != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+    
+    log = await db.moderation_log.find({}, {"_id": 0}).sort("timestamp", -1).to_list(100)
+    return log
+
 # ==================== AI RESET GENERATION ====================
 
 @api_router.post("/ai/reset")
