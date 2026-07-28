@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '../constants/colors';
+import { useTheme } from '../store/useTheme';
+import { Theme } from '../constants/themes';
 
 interface PageHeaderProps {
   icon: string;
@@ -9,6 +10,9 @@ interface PageHeaderProps {
 }
 
 export const PageHeader = ({ icon, title, subtitle }: PageHeaderProps) => {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -21,34 +25,37 @@ export const PageHeader = ({ icon, title, subtitle }: PageHeaderProps) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    marginBottom: 24,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 8,
-  },
-  icon: {
-    fontSize: 28,
-  },
-  title: {
-    fontSize: 30,
-    fontWeight: '600',
-    color: Colors.cream,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: 'rgba(245,237,216,0.5)',
-    lineHeight: 20,
-    paddingLeft: 44,
-  },
-  divider: {
-    width: '100%',
-    height: 1,
-    backgroundColor: Colors.glassBdr,
-    marginTop: 16,
-  },
-});
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    container: {
+      marginBottom: 24,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginBottom: 8,
+    },
+    icon: {
+      fontSize: 28,
+    },
+    title: {
+      fontSize: 26,
+      fontWeight: '600',
+      color: theme.cream,
+      flex: 1,
+      flexWrap: 'wrap',
+    },
+    subtitle: {
+      fontSize: 13,
+      color: 'rgba(245,237,216,0.6)',
+      lineHeight: 20,
+      paddingLeft: 44,
+    },
+    divider: {
+      width: '100%',
+      height: 1,
+      backgroundColor: theme.glassBdr,
+      marginTop: 16,
+    },
+  });

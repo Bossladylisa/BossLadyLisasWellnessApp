@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,8 @@ import {
   Platform,
 } from 'react-native';
 import { PageHeader } from '../src/components/PageHeader';
-import { Colors } from '../src/constants/colors';
+import { useTheme } from '../src/store/useTheme';
+import { Theme } from '../src/constants/themes';
 import { api } from '../src/services/api';
 
 interface Feedback {
@@ -20,6 +21,8 @@ interface Feedback {
 }
 
 export default function FeedbackPage() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [text, setText] = useState('');
 
@@ -86,10 +89,10 @@ export default function FeedbackPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.teal,
+    backgroundColor: theme.teal,
   },
   scrollView: {
     flex: 1,
@@ -98,9 +101,9 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   card: {
-    backgroundColor: Colors.glass,
+    backgroundColor: theme.glass,
     borderWidth: 1,
-    borderColor: Colors.glassBdr,
+    borderColor: theme.glassBdr,
     borderRadius: 18,
     padding: 24,
     marginBottom: 24,
@@ -113,9 +116,9 @@ const styles = StyleSheet.create({
   textarea: {
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: Colors.glassBdr,
+    borderColor: theme.glassBdr,
     borderRadius: 10,
-    color: Colors.cream,
+    color: theme.cream,
     fontSize: 14,
     padding: 14,
     minHeight: 120,
@@ -123,13 +126,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   button: {
-    backgroundColor: Colors.gold,
+    backgroundColor: theme.gold,
     borderRadius: 30,
     padding: 12,
     alignItems: 'center',
   },
   buttonText: {
-    color: Colors.teal,
+    color: theme.teal,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -143,11 +146,11 @@ const styles = StyleSheet.create({
   },
   feedbackTime: {
     fontSize: 11,
-    color: Colors.terraLt,
+    color: theme.terraLt,
     marginBottom: 6,
   },
   feedbackText: {
-    color: Colors.cream,
+    color: theme.cream,
     fontSize: 14,
     lineHeight: 22,
     fontStyle: 'italic',

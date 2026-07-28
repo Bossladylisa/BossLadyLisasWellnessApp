@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,14 @@ import {
   StyleSheet,
 } from 'react-native';
 import { PageHeader } from '../src/components/PageHeader';
-import { Colors } from '../src/constants/colors';
+import { useTheme } from '../src/store/useTheme';
+import { Theme } from '../src/constants/themes';
 import { DECLUTTER_ITEMS } from '../src/constants/data';
 import { api } from '../src/services/api';
 
 export default function DeclutterPage() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const [declutter, setDeclutter] = useState<Record<string, boolean>>({});
   const [timerDur, setTimerDur] = useState(5);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
@@ -192,10 +195,10 @@ export default function DeclutterPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.teal,
+    backgroundColor: theme.teal,
   },
   scrollView: {
     flex: 1,
@@ -204,9 +207,9 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   card: {
-    backgroundColor: Colors.glass,
+    backgroundColor: theme.glass,
     borderWidth: 1,
-    borderColor: Colors.glassBdr,
+    borderColor: theme.glassBdr,
     borderRadius: 18,
     padding: 24,
     marginBottom: 24,
@@ -223,7 +226,7 @@ const styles = StyleSheet.create({
   },
   progressPercent: {
     fontSize: 22,
-    color: Colors.gold,
+    color: theme.gold,
   },
   progressBar: {
     backgroundColor: 'rgba(255,255,255,0.08)',
@@ -233,7 +236,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: Colors.terra,
+    backgroundColor: theme.terra,
     borderRadius: 20,
   },
   progressText: {
@@ -262,8 +265,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   checkboxChecked: {
-    borderColor: Colors.terra,
-    backgroundColor: Colors.terra,
+    borderColor: theme.terra,
+    backgroundColor: theme.terra,
   },
   checkmark: {
     color: 'white',
@@ -271,7 +274,7 @@ const styles = StyleSheet.create({
   },
   checkText: {
     flex: 1,
-    color: Colors.cream,
+    color: theme.cream,
     fontSize: 14,
   },
   checkTextDone: {
@@ -284,13 +287,13 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.glassBdr,
+    backgroundColor: theme.glassBdr,
     marginVertical: 20,
   },
   timerTitle: {
     fontSize: 22,
     fontWeight: '600',
-    color: Colors.goldLt,
+    color: theme.goldLt,
     marginBottom: 4,
   },
   timerSubtitle: {
@@ -310,9 +313,9 @@ const styles = StyleSheet.create({
   timerInput: {
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: Colors.glassBdr,
+    borderColor: theme.glassBdr,
     borderRadius: 10,
-    color: Colors.cream,
+    color: theme.cream,
     fontSize: 14,
     padding: 14,
     width: 70,
@@ -320,13 +323,13 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
-    backgroundColor: Colors.gold,
+    backgroundColor: theme.gold,
     borderRadius: 30,
     padding: 12,
     alignItems: 'center',
   },
   buttonText: {
-    color: Colors.teal,
+    color: theme.teal,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -336,7 +339,7 @@ const styles = StyleSheet.create({
   timerTime: {
     fontSize: 62,
     fontWeight: '300',
-    color: Colors.goldLt,
+    color: theme.goldLt,
     letterSpacing: 4,
   },
   timerStatus: {
@@ -351,13 +354,13 @@ const styles = StyleSheet.create({
   ghostButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: Colors.glassBdr,
+    borderColor: theme.glassBdr,
     borderRadius: 30,
     paddingVertical: 8,
     paddingHorizontal: 20,
   },
   ghostButtonText: {
-    color: Colors.cream,
+    color: theme.cream,
     fontSize: 14,
   },
   resetButton: {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,8 @@ import {
   Platform,
 } from 'react-native';
 import { PageHeader } from '../src/components/PageHeader';
-import { Colors } from '../src/constants/colors';
+import { useTheme } from '../src/store/useTheme';
+import { Theme } from '../src/constants/themes';
 import { api } from '../src/services/api';
 
 interface Affirmation {
@@ -19,6 +20,8 @@ interface Affirmation {
 }
 
 export default function AffirmationsPage() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const [affirmations, setAffirmations] = useState<Affirmation[]>([]);
   const [newAff, setNewAff] = useState('');
   const [displayed, setDisplayed] = useState<string | null>(null);
@@ -163,10 +166,10 @@ export default function AffirmationsPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.teal,
+    backgroundColor: theme.teal,
   },
   scrollView: {
     flex: 1,
@@ -175,9 +178,9 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   statsCard: {
-    backgroundColor: Colors.glass,
+    backgroundColor: theme.glass,
     borderWidth: 1,
-    borderColor: Colors.glassBdr,
+    borderColor: theme.glassBdr,
     borderRadius: 18,
     padding: 24,
     marginBottom: 24,
@@ -196,7 +199,7 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 34,
-    color: Colors.gold,
+    color: theme.gold,
     letterSpacing: 2,
   },
   streakContainer: {
@@ -204,21 +207,21 @@ const styles = StyleSheet.create({
   },
   streakText: {
     fontSize: 26,
-    color: Colors.terraLt,
+    color: theme.terraLt,
   },
   button: {
-    backgroundColor: Colors.gold,
+    backgroundColor: theme.gold,
     borderRadius: 30,
     paddingVertical: 12,
     paddingHorizontal: 24,
   },
   buttonText: {
-    color: Colors.teal,
+    color: theme.teal,
     fontSize: 14,
     fontWeight: '700',
   },
   displayCard: {
-    backgroundColor: Colors.glass,
+    backgroundColor: theme.glass,
     borderWidth: 1,
     borderColor: 'rgba(212,168,67,0.38)',
     borderRadius: 18,
@@ -228,7 +231,7 @@ const styles = StyleSheet.create({
   },
   displayLabel: {
     fontSize: 11,
-    color: Colors.terraLt,
+    color: theme.terraLt,
     letterSpacing: 2,
     textTransform: 'uppercase',
     marginBottom: 14,
@@ -236,18 +239,18 @@ const styles = StyleSheet.create({
   displayText: {
     fontSize: 26,
     fontStyle: 'italic',
-    color: Colors.goldLt,
+    color: theme.goldLt,
     lineHeight: 36,
     textAlign: 'center',
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.glassBdr,
+    backgroundColor: theme.glassBdr,
     marginVertical: 20,
   },
   sectionTitle: {
     fontSize: 20,
-    color: Colors.goldLt,
+    color: theme.goldLt,
     marginBottom: 10,
   },
   inputRow: {
@@ -259,20 +262,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: Colors.glassBdr,
+    borderColor: theme.glassBdr,
     borderRadius: 10,
-    color: Colors.cream,
+    color: theme.cream,
     fontSize: 14,
     padding: 14,
   },
   addButton: {
-    backgroundColor: Colors.gold,
+    backgroundColor: theme.gold,
     borderRadius: 30,
     paddingHorizontal: 20,
     justifyContent: 'center',
   },
   addButtonText: {
-    color: Colors.teal,
+    color: theme.teal,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -288,13 +291,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   affIcon: {
-    color: Colors.gold,
+    color: theme.gold,
     fontSize: 12,
     minWidth: 20,
   },
   affText: {
     flex: 1,
-    color: Colors.cream,
+    color: theme.cream,
     fontSize: 14,
     fontStyle: 'italic',
   },

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { PageHeader } from '../src/components/PageHeader';
-import { Colors } from '../src/constants/colors';
+import { useTheme } from '../src/store/useTheme';
+import { Theme } from '../src/constants/themes';
 import { api } from '../src/services/api';
 
 interface Task {
@@ -22,6 +23,8 @@ interface Task {
 }
 
 export default function PlannerPage() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [taskText, setTaskText] = useState('');
   const [priority, setPriority] = useState('Medium');
@@ -72,7 +75,7 @@ export default function PlannerPage() {
   const done = tasks.filter((t) => t.completed);
 
   const getPriorityColor = (p: string) =>
-    p === 'High' ? '#ff8080' : p === 'Medium' ? Colors.gold : '#6dd5c4';
+    p === 'High' ? '#ff8080' : p === 'Medium' ? theme.gold : '#6dd5c4';
 
   const getPriorityBg = (p: string) =>
     p === 'High'
@@ -109,7 +112,7 @@ export default function PlannerPage() {
                 selectedValue={priority}
                 onValueChange={(value) => setPriority(value)}
                 style={styles.picker}
-                dropdownIconColor={Colors.cream}
+                dropdownIconColor={theme.cream}
               >
                 <Picker.Item label="High" value="High" />
                 <Picker.Item label="Medium" value="Medium" />
@@ -191,10 +194,10 @@ export default function PlannerPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.teal,
+    backgroundColor: theme.teal,
   },
   scrollView: {
     flex: 1,
@@ -203,9 +206,9 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   card: {
-    backgroundColor: Colors.glass,
+    backgroundColor: theme.glass,
     borderWidth: 1,
-    borderColor: Colors.glassBdr,
+    borderColor: theme.glassBdr,
     borderRadius: 18,
     padding: 24,
     marginBottom: 24,
@@ -224,37 +227,37 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: Colors.glassBdr,
+    borderColor: theme.glassBdr,
     borderRadius: 10,
-    color: Colors.cream,
+    color: theme.cream,
     fontSize: 14,
     padding: 14,
   },
   pickerContainer: {
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: Colors.glassBdr,
+    borderColor: theme.glassBdr,
     borderRadius: 10,
     justifyContent: 'center',
     minWidth: 110,
   },
   picker: {
-    color: Colors.cream,
+    color: theme.cream,
   },
   button: {
-    backgroundColor: Colors.gold,
+    backgroundColor: theme.gold,
     borderRadius: 30,
     padding: 12,
     alignItems: 'center',
   },
   buttonText: {
-    color: Colors.teal,
+    color: theme.teal,
     fontSize: 14,
     fontWeight: '700',
   },
   sectionTitle: {
     fontSize: 20,
-    color: Colors.goldLt,
+    color: theme.goldLt,
     marginBottom: 12,
   },
   taskCard: {
@@ -280,7 +283,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   taskText: {
-    color: Colors.cream,
+    color: theme.cream,
     fontSize: 14,
   },
   taskActions: {
@@ -290,13 +293,13 @@ const styles = StyleSheet.create({
   doneButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: Colors.glassBdr,
+    borderColor: theme.glassBdr,
     borderRadius: 30,
     paddingVertical: 6,
     paddingHorizontal: 14,
   },
   doneText: {
-    color: Colors.cream,
+    color: theme.cream,
     fontSize: 12,
   },
   deleteButton: {
@@ -315,7 +318,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.glassBdr,
+    backgroundColor: theme.glassBdr,
     marginVertical: 20,
   },
   completedTask: {

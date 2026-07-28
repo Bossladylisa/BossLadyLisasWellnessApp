@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,14 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { PageHeader } from '../src/components/PageHeader';
-import { Colors } from '../src/constants/colors';
+import { useTheme } from '../src/store/useTheme';
+import { Theme } from '../src/constants/themes';
 import { MOODS, RESET_CARDS } from '../src/constants/data';
 import { api } from '../src/services/api';
 
 export default function ResetToolkit() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const [selected, setSelected] = useState<{
     label: string;
     emoji: string;
@@ -170,7 +173,7 @@ export default function ResetToolkit() {
 
         {aiLoading && (
           <View style={styles.loadingCard}>
-            <ActivityIndicator size="large" color={Colors.gold} />
+            <ActivityIndicator size="large" color={theme.gold} />
             <Text style={styles.loadingText}>
               Channeling your personalized somatic guidance…
             </Text>
@@ -188,10 +191,10 @@ export default function ResetToolkit() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.teal,
+    backgroundColor: theme.teal,
   },
   scrollView: {
     flex: 1,
@@ -200,9 +203,9 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   card: {
-    backgroundColor: Colors.glass,
+    backgroundColor: theme.glass,
     borderWidth: 1,
-    borderColor: Colors.glassBdr,
+    borderColor: theme.glassBdr,
     borderRadius: 18,
     padding: 24,
     marginBottom: 20,
@@ -240,9 +243,9 @@ const styles = StyleSheet.create({
   },
   moodButton: {
     width: '30%',
-    backgroundColor: Colors.glass,
+    backgroundColor: theme.glass,
     borderWidth: 1,
-    borderColor: Colors.glassBdr,
+    borderColor: theme.glassBdr,
     borderRadius: 14,
     padding: 13,
     alignItems: 'center',
@@ -253,24 +256,24 @@ const styles = StyleSheet.create({
   },
   moodText: {
     fontSize: 12,
-    color: Colors.cream,
+    color: theme.cream,
     fontWeight: '600',
   },
   generateButton: {
-    backgroundColor: Colors.gold,
+    backgroundColor: theme.gold,
     borderRadius: 30,
     padding: 12,
     alignItems: 'center',
     marginBottom: 24,
   },
   generateButtonText: {
-    color: Colors.teal,
+    color: theme.teal,
     fontSize: 14,
     fontWeight: '700',
   },
   resetHeader: {
     fontSize: 11,
-    color: Colors.terraLt,
+    color: theme.terraLt,
     letterSpacing: 2,
     textTransform: 'uppercase',
     marginBottom: 10,
@@ -278,15 +281,15 @@ const styles = StyleSheet.create({
   quote: {
     fontSize: 24,
     fontStyle: 'italic',
-    color: Colors.goldLt,
+    color: theme.goldLt,
     lineHeight: 34,
     marginBottom: 14,
     borderLeftWidth: 3,
-    borderLeftColor: Colors.terra,
+    borderLeftColor: theme.terra,
     paddingLeft: 16,
   },
   tip: {
-    color: Colors.cream,
+    color: theme.cream,
     fontSize: 14,
     lineHeight: 22,
     marginBottom: 12,
@@ -306,10 +309,10 @@ const styles = StyleSheet.create({
   },
   focusText: {
     fontSize: 11,
-    color: Colors.gold,
+    color: theme.gold,
   },
   loadingCard: {
-    backgroundColor: Colors.glass,
+    backgroundColor: theme.glass,
     borderRadius: 18,
     padding: 24,
     alignItems: 'center',
@@ -321,7 +324,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   aiCard: {
-    backgroundColor: Colors.terraDk,
+    backgroundColor: theme.terraDk,
     borderRadius: 18,
     padding: 24,
   },
@@ -333,7 +336,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   aiText: {
-    color: Colors.cream,
+    color: theme.cream,
     fontSize: 14,
     lineHeight: 24,
   },

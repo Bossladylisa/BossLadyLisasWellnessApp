@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,13 @@ import {
   StyleSheet,
 } from 'react-native';
 import { PageHeader } from '../src/components/PageHeader';
-import { Colors } from '../src/constants/colors';
+import { useTheme } from '../src/store/useTheme';
+import { Theme } from '../src/constants/themes';
 import { DEFAULT_AFFIRMATIONS } from '../src/constants/data';
 
 export default function QuotesPage() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const [quote, setQuote] = useState(DEFAULT_AFFIRMATIONS[0]);
 
   const random = () => {
@@ -74,10 +77,10 @@ export default function QuotesPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: Theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.teal,
+    backgroundColor: theme.teal,
   },
   scrollView: {
     flex: 1,
@@ -86,7 +89,7 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   quoteCard: {
-    backgroundColor: Colors.tealMid,
+    backgroundColor: theme.tealMid,
     borderWidth: 1,
     borderColor: 'rgba(212,168,67,0.4)',
     borderRadius: 24,
@@ -100,48 +103,48 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 2,
-    backgroundColor: Colors.gold,
+    backgroundColor: theme.gold,
   },
   quoteText: {
     fontSize: 26,
     fontStyle: 'italic',
-    color: Colors.goldLt,
+    color: theme.goldLt,
     lineHeight: 38,
     textAlign: 'center',
   },
   bottomLine: {
     width: 36,
     height: 1,
-    backgroundColor: Colors.terra,
+    backgroundColor: theme.terra,
     marginTop: 18,
     marginBottom: 10,
   },
   attribution: {
     fontSize: 11,
-    color: Colors.terraLt,
+    color: theme.terraLt,
     letterSpacing: 2,
     textTransform: 'uppercase',
   },
   button: {
-    backgroundColor: Colors.gold,
+    backgroundColor: theme.gold,
     borderRadius: 30,
     padding: 12,
     alignItems: 'center',
     marginBottom: 28,
   },
   buttonText: {
-    color: Colors.teal,
+    color: theme.teal,
     fontSize: 14,
     fontWeight: '700',
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.glassBdr,
+    backgroundColor: theme.glassBdr,
     marginVertical: 20,
   },
   sectionTitle: {
     fontSize: 18,
-    color: Colors.goldLt,
+    color: theme.goldLt,
     marginBottom: 8,
   },
   sectionSubtitle: {
@@ -155,21 +158,21 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   affirmationTag: {
-    backgroundColor: Colors.glass,
+    backgroundColor: theme.glass,
     borderWidth: 1,
-    borderColor: Colors.glassBdr,
+    borderColor: theme.glassBdr,
     borderRadius: 30,
     paddingVertical: 6,
     paddingHorizontal: 16,
   },
   affirmationTagActive: {
-    borderColor: Colors.gold,
+    borderColor: theme.gold,
   },
   affirmationText: {
     fontSize: 13,
-    color: Colors.cream,
+    color: theme.cream,
   },
   affirmationTextActive: {
-    color: Colors.gold,
+    color: theme.gold,
   },
 });
