@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Redirect, useRouter } from 'expo-router';
 import {
   View,
   Text,
@@ -9,13 +10,17 @@ import {
 } from 'react-native';
 import { PageHeader } from '../src/components/PageHeader';
 import { useTheme } from '../src/store/useTheme';
+import { useAuth } from '../src/store/useAuth';
 import { Theme } from '../src/constants/themes';
 import { MOODS, RESET_CARDS } from '../src/constants/data';
 import { api } from '../src/services/api';
 
 export default function ResetToolkit() {
   const theme = useTheme();
+  const router = useRouter();
   const styles = useMemo(() => makeStyles(theme), [theme]);
+
+  const { user: _authUser } = useAuth();
   const [selected, setSelected] = useState<{
     label: string;
     emoji: string;
@@ -28,12 +33,19 @@ export default function ResetToolkit() {
   } | null>(null);
   const [aiCard, setAiCard] = useState<string>('');
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [usage, setUsage] = useState<{
+    remaining: number | null;
+    daily_limit: number | null;
+    unlimited: boolean;
+  } | null>(null);
   const [moodHistory, setMoodHistory] = useState<
     Array<{ mood: string; color: string }>
   >([]);
 
   useEffect(() => {
     loadMoodHistory();
+    loadUsage();
   }, []);
 
   const loadMoodHistory = async () => {
@@ -45,12 +57,26 @@ export default function ResetToolkit() {
     }
   };
 
+  const loadUsage = async () => {
+    try {
+      const data = await api.getAIUsage();
+      setUsage({
+        remaining: data.remaining,
+        daily_limit: data.daily_limit,
+        unlimited: !!data.unlimited,
+      });
+    } catch (e) {
+      // silent
+    }
+  };
+
   const generate = async () => {
     if (!selected) return;
 
     setCard(RESET_CARDS[selected.label]);
     setAiLoading(true);
     setAiCard('');
+    setAiError(null);
 
     try {
       // Save mood to history
@@ -59,6 +85,17 @@ export default function ResetToolkit() {
 
       // Get AI-generated reset
       const response = await api.generateAIReset(selected.label);
+      if (!response.ok) {
+        if (response.status === 429) {
+          const body = await response.json().catch(() => ({}));
+          setAiError(body.detail || 'Daily free AI limit reached. Upgrade to Premium for unlimited access.');
+          setAiLoading(false);
+          return;
+        }
+        setAiError('AI service unavailable right now. Please try again shortly.');
+        setAiLoading(false);
+        return;
+      }
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
 
@@ -85,9 +122,13 @@ export default function ResetToolkit() {
       }
     } catch (error) {
       console.error('Failed to generate reset:', error);
+      setAiError('Something went wrong. Please try again.');
     }
     setAiLoading(false);
+    loadUsage();
   };
+
+  if (!_authUser) return <Redirect href="/login" />;
 
   return (
     <View style={styles.container}>
@@ -97,6 +138,21 @@ export default function ResetToolkit() {
           title="Reset Toolkit"
           subtitle="Select your current emotional state and receive a somatic reset card to help you return to center."
         />
+
+        {usage && (
+          <View style={styles.usagePill}>
+            <Text style={styles.usagePillText}>
+              {usage.unlimited
+                ? '✨ Premium · Unlimited AI'
+                : `Free AI · ${usage.remaining ?? 0} of ${usage.daily_limit ?? 3} left today`}
+            </Text>
+            {!usage.unlimited && (
+              <TouchableOpacity onPress={() => router.push('/upgrade' as any)}>
+                <Text style={styles.usagePillUpgrade}>Upgrade →</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
         {moodHistory.length > 0 && (
           <View style={styles.card}>
@@ -177,6 +233,18 @@ export default function ResetToolkit() {
             <Text style={styles.loadingText}>
               Channeling your personalized somatic guidance…
             </Text>
+          </View>
+        )}
+
+        {aiError && !aiLoading && (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorText}>{aiError}</Text>
+            <TouchableOpacity
+              style={styles.errorUpgradeBtn}
+              onPress={() => router.push('/upgrade' as any)}
+            >
+              <Text style={styles.errorUpgradeText}>✨ Upgrade to Premium</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -339,5 +407,55 @@ const makeStyles = (theme: Theme) => StyleSheet.create({
     color: theme.cream,
     fontSize: 14,
     lineHeight: 24,
+  },
+  usagePill: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(232,184,77,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(232,184,77,0.3)',
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginBottom: 18,
+  },
+  usagePillText: {
+    color: theme.goldLt,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  usagePillUpgrade: {
+    color: theme.gold,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  errorCard: {
+    backgroundColor: 'rgba(255,120,120,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,120,120,0.35)',
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  errorText: {
+    color: theme.cream,
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  errorUpgradeBtn: {
+    backgroundColor: theme.gold,
+    borderRadius: 24,
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+  },
+  errorUpgradeText: {
+    color: theme.teal,
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

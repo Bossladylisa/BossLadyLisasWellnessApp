@@ -7,7 +7,7 @@ import {
   StyleSheet,
   StatusBar,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Redirect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../src/store/useTheme';
@@ -15,6 +15,7 @@ import { Theme } from '../src/constants/themes';
 import { DecorativeBackground } from '../src/components/DecorativeBackground';
 import { ThemePickerModal } from '../src/components/ThemePickerModal';
 import { DragonflyIcon } from '../src/components/DragonflyIcon';
+import { useAuthStore } from '../src/store/useAuth';
 
 const getFeatures = (theme: Theme) => [
   {
@@ -67,6 +68,13 @@ const getFeatures = (theme: Theme) => [
     color: theme.goldLt,
   },
   {
+    id: 'rhythm',
+    icon: '⏱️',
+    title: 'Sacred Rhythm',
+    subtitle: 'Structured reminders for time perception',
+    color: theme.terra,
+  },
+  {
     id: 'feedback',
     icon: '💌',
     title: 'Share Feedback',
@@ -86,9 +94,15 @@ export default function HomeScreen() {
   const router = useRouter();
   const theme = useTheme();
   const [themePickerVisible, setThemePickerVisible] = useState(false);
+  const { user, logout } = useAuthStore();
 
   const features = useMemo(() => getFeatures(theme), [theme]);
   const styles = useMemo(() => makeStyles(theme), [theme]);
+
+  if (!user) return <Redirect href="/login" />;
+
+  const isPremium = user?.subscription_tier === 'premium' || user?.is_admin;
+  const PREMIUM_FEATURE_IDS = ['planner', 'declutter', 'affirmations', 'rhythm'];
 
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
@@ -107,15 +121,35 @@ export default function HomeScreen() {
       />
       <DecorativeBackground />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        {/* Theme picker button - top right */}
-        <TouchableOpacity
-          testID="theme-picker-button"
-          style={styles.themeButton}
-          onPress={() => setThemePickerVisible(true)}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.themeButtonIcon}>🎨</Text>
-        </TouchableOpacity>
+        {/* Top bar with theme + user menu */}
+        <View style={styles.topBar}>
+          {user?.is_admin && (
+            <TouchableOpacity
+              testID="admin-shortcut-button"
+              style={styles.topBarButton}
+              onPress={() => router.push('/admin' as any)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.topBarIcon}>👑</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            testID="theme-picker-button"
+            style={styles.topBarButton}
+            onPress={() => setThemePickerVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.topBarIcon}>🎨</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            testID="logout-button"
+            style={styles.topBarButton}
+            onPress={logout}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.topBarIcon}>⎋</Text>
+          </TouchableOpacity>
+        </View>
 
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -154,39 +188,76 @@ export default function HomeScreen() {
           {/* Feature Cards Grid */}
           <Text style={styles.sectionTitle}>Your Sanctuary Tools</Text>
 
+          {!isPremium && (
+            <TouchableOpacity
+              testID="upgrade-banner"
+              onPress={() => router.push('/upgrade' as any)}
+              style={styles.upgradeBanner}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.upgradeBannerIcon}>✨</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.upgradeBannerTitle}>
+                  Unlock Sacred Sanctuary
+                </Text>
+                <Text style={styles.upgradeBannerText}>
+                  AI Reset, Planner, Timer & more — $4.99/mo
+                </Text>
+              </View>
+              <Text style={styles.upgradeBannerArrow}>›</Text>
+            </TouchableOpacity>
+          )}
+
           <View style={styles.cardsGrid}>
-            {features.map((feature) => (
-              <TouchableOpacity
-                key={feature.id}
-                testID={`feature-card-${feature.id}`}
-                style={[
-                  styles.featureCard,
-                  { borderColor: `${feature.color}55` },
-                ]}
-                onPress={() => router.push(`/${feature.id}` as any)}
-                activeOpacity={0.7}
-              >
-                <View
+            {features.map((feature) => {
+              const isPremiumFeature = PREMIUM_FEATURE_IDS.includes(feature.id);
+              const isLocked = isPremiumFeature && !isPremium;
+
+              return (
+                <TouchableOpacity
+                  key={feature.id}
+                  testID={`feature-card-${feature.id}`}
                   style={[
-                    styles.iconContainer,
-                    { backgroundColor: `${feature.color}22` },
+                    styles.featureCard,
+                    { borderColor: `${feature.color}55` },
+                    isLocked && { opacity: 0.75 },
                   ]}
+                  onPress={() =>
+                    isLocked
+                      ? router.push('/upgrade' as any)
+                      : router.push(`/${feature.id}` as any)
+                  }
+                  activeOpacity={0.7}
                 >
-                  {feature.icon === 'DRAGONFLY' ? (
-                    <DragonflyIcon size={28} color={feature.color} opacity={0.95} />
-                  ) : (
-                    <Text style={styles.featureIcon}>{feature.icon}</Text>
-                  )}
-                </View>
-                <View style={styles.cardContent}>
-                  <Text style={[styles.cardTitle, { color: feature.color }]}>
-                    {feature.title}
-                  </Text>
-                  <Text style={styles.cardSubtitle}>{feature.subtitle}</Text>
-                </View>
-                <Text style={[styles.arrow, { color: feature.color }]}>›</Text>
-              </TouchableOpacity>
-            ))}
+                  <View
+                    style={[
+                      styles.iconContainer,
+                      { backgroundColor: `${feature.color}22` },
+                    ]}
+                  >
+                    {feature.icon === 'DRAGONFLY' ? (
+                      <DragonflyIcon size={28} color={feature.color} opacity={0.95} />
+                    ) : (
+                      <Text style={styles.featureIcon}>{feature.icon}</Text>
+                    )}
+                  </View>
+                  <View style={styles.cardContent}>
+                    <View style={styles.cardTitleRow}>
+                      <Text style={[styles.cardTitle, { color: feature.color }]}>
+                        {feature.title}
+                      </Text>
+                      {isPremiumFeature && (
+                        <Text style={styles.premiumBadge}>
+                          {isPremium ? '✨' : '🔒'}
+                        </Text>
+                      )}
+                    </View>
+                    <Text style={styles.cardSubtitle}>{feature.subtitle}</Text>
+                  </View>
+                  <Text style={[styles.arrow, { color: feature.color }]}>›</Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           {/* Footer */}
@@ -257,6 +328,67 @@ const makeStyles = (theme: Theme) =>
     },
     themeButtonIcon: {
       fontSize: 20,
+    },
+    topBar: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      zIndex: 10,
+    },
+    topBarButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: theme.glass,
+      borderWidth: 1,
+      borderColor: theme.glassBdr,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    topBarIcon: {
+      fontSize: 18,
+      color: theme.cream,
+    },
+    upgradeBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      backgroundColor: 'rgba(232,184,77,0.18)',
+      borderWidth: 1.5,
+      borderColor: theme.gold,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 16,
+    },
+    upgradeBannerIcon: {
+      fontSize: 24,
+    },
+    upgradeBannerTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: theme.goldLt,
+      marginBottom: 2,
+    },
+    upgradeBannerText: {
+      fontSize: 12,
+      color: theme.cream,
+      opacity: 0.8,
+    },
+    upgradeBannerArrow: {
+      fontSize: 22,
+      color: theme.gold,
+      fontWeight: '600',
+    },
+    cardTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 2,
+    },
+    premiumBadge: {
+      fontSize: 12,
     },
     header: {
       alignItems: 'center',
@@ -380,7 +512,6 @@ const makeStyles = (theme: Theme) =>
     cardTitle: {
       fontSize: 15,
       fontWeight: '600',
-      marginBottom: 2,
     },
     cardSubtitle: {
       fontSize: 12,

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Redirect } from 'expo-router';
 import {
   View,
   Text,
@@ -11,6 +12,7 @@ import {
 } from 'react-native';
 import { PageHeader } from '../src/components/PageHeader';
 import { useTheme } from '../src/store/useTheme';
+import { useAuth } from '../src/store/useAuth';
 import { Theme } from '../src/constants/themes';
 import { api } from '../src/services/api';
 
@@ -23,6 +25,8 @@ interface Feedback {
 export default function FeedbackPage() {
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
+
+  const { user: _authUser } = useAuth();
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [text, setText] = useState('');
 
@@ -49,6 +53,8 @@ export default function FeedbackPage() {
       console.error('Failed to submit feedback:', error);
     }
   };
+
+  if (!_authUser) return <Redirect href="/login" />;
 
   return (
     <KeyboardAvoidingView

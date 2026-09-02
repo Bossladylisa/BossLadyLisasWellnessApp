@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Redirect } from 'expo-router';
 import {
   View,
   Text,
@@ -12,6 +13,7 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import { PageHeader } from '../src/components/PageHeader';
 import { useTheme } from '../src/store/useTheme';
+import { useAuth } from '../src/store/useAuth';
 import { Theme } from '../src/constants/themes';
 import { api } from '../src/services/api';
 
@@ -25,6 +27,8 @@ interface Task {
 export default function PlannerPage() {
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
+
+  const { user: _authUser } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [taskText, setTaskText] = useState('');
   const [priority, setPriority] = useState('Medium');
@@ -83,6 +87,8 @@ export default function PlannerPage() {
       : p === 'Medium'
       ? 'rgba(212,168,67,0.2)'
       : 'rgba(26,107,97,0.3)';
+
+  if (!_authUser) return <Redirect href="/login" />;
 
   return (
     <KeyboardAvoidingView

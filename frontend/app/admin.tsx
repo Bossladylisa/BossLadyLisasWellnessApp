@@ -4,152 +4,152 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { PageHeader } from '../src/components/PageHeader';
 import { useTheme } from '../src/store/useTheme';
 import { Theme } from '../src/constants/themes';
-
-const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL + '/api';
+import { useAuth, authFetch } from '../src/store/useAuth';
 
 interface AdminStats {
+  users: number;
+  premium_users: number;
+  admins: number;
   journal_entries: number;
   life_notes: number;
   tasks: number;
   affirmations: number;
   feedback: number;
   mood_entries: number;
-  total_content: number;
+}
+
+interface AdminUser {
+  user_id: string;
+  email: string;
+  name?: string;
+  is_admin: boolean;
+  subscription_tier: string;
+  created_at?: string;
 }
 
 interface FeedbackItem {
   id: string;
   text: string;
   time: string;
+  user_email?: string;
 }
 
-interface ModerationLog {
+interface LogEntry {
   id: string;
   content_type: string;
   item_id: string;
   reason: string;
+  admin_email?: string;
   timestamp: string;
 }
 
 export default function AdminDashboard() {
+  const router = useRouter();
   const theme = useTheme();
+  const { user } = useAuth();
   const styles = useMemo(() => makeStyles(theme), [theme]);
 
-  const [password, setPassword] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [tab, setTab] = useState<'overview' | 'users' | 'moderate' | 'log'>('overview');
   const [stats, setStats] = useState<AdminStats | null>(null);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
-  const [moderationLog, setModerationLog] = useState<ModerationLog[]>([]);
-  const [activeTab, setActiveTab] = useState<'overview' | 'moderation' | 'log'>('overview');
-  const [loading, setLoading] = useState(false);
+  const [log, setLog] = useState<LogEntry[]>([]);
   const [error, setError] = useState('');
 
-  const handleLogin = async () => {
-    if (!password.trim()) return;
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch(`${API_BASE}/admin/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      });
-      if (!res.ok) {
-        setError('Invalid admin password');
-        setLoading(false);
-        return;
-      }
-      setIsAuthenticated(true);
-      await loadData();
-    } catch (e) {
-      setError('Connection error');
+  useEffect(() => {
+    if (user?.is_admin) {
+      loadAll();
     }
-    setLoading(false);
-  };
+  }, [user]);
 
-  const loadData = async () => {
+  const loadAll = async () => {
     try {
-      const [statsRes, feedbackRes, logRes] = await Promise.all([
-        fetch(`${API_BASE}/admin/stats?password=${encodeURIComponent(password)}`),
-        fetch(`${API_BASE}/admin/feedback?password=${encodeURIComponent(password)}`),
-        fetch(`${API_BASE}/admin/moderation-log?password=${encodeURIComponent(password)}`),
+      const [s, u, f, l] = await Promise.all([
+        authFetch('/admin/stats'),
+        authFetch('/admin/users'),
+        authFetch('/admin/feedback'),
+        authFetch('/admin/moderation-log'),
       ]);
-
-      if (statsRes.ok) setStats(await statsRes.json());
-      if (feedbackRes.ok) setFeedback(await feedbackRes.json());
-      if (logRes.ok) setModerationLog(await logRes.json());
-    } catch (e) {
-      console.error('Failed to load admin data:', e);
+      if (s.ok) setStats(await s.json());
+      if (u.ok) setUsers(await u.json());
+      if (f.ok) setFeedback(await f.json());
+      if (l.ok) setLog(await l.json());
+    } catch (e: any) {
+      setError('Failed to load admin data: ' + e?.message);
     }
   };
 
-  const handleRemove = async (type: string, id: string) => {
-    if (!confirm('Remove this item permanently? This cannot be undone.')) return;
-
+  const toggleAdmin = async (userId: string, current: boolean) => {
     try {
-      const res = await fetch(
-        `${API_BASE}/admin/moderate/${type}/${id}?password=${encodeURIComponent(password)}&reason=${encodeURIComponent('Admin removal')}`,
+      const res = await authFetch(`/admin/users/${userId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_admin: !current }),
+      });
+      if (res.ok) {
+        await loadAll();
+      } else {
+        const err = await res.json();
+        setError(err?.detail || 'Update failed');
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Update failed');
+    }
+  };
+
+  const togglePremium = async (userId: string, currentTier: string) => {
+    try {
+      const newTier = currentTier === 'premium' ? 'free' : 'premium';
+      const res = await authFetch(`/admin/users/${userId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ subscription_tier: newTier }),
+      });
+      if (res.ok) {
+        await loadAll();
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Update failed');
+    }
+  };
+
+  const removeContent = async (type: string, id: string) => {
+    if (typeof confirm !== 'undefined' && !confirm('Remove this permanently?')) return;
+    try {
+      const res = await authFetch(
+        `/admin/moderate/${type}/${id}?reason=${encodeURIComponent('Admin removal')}`,
         { method: 'DELETE' }
       );
-      if (res.ok) {
-        await loadData();
-      } else {
-        setError('Failed to remove item');
-      }
-    } catch (e) {
-      setError('Connection error');
+      if (res.ok) await loadAll();
+    } catch (e: any) {
+      setError(e?.message);
     }
   };
 
-  if (!isAuthenticated) {
+  if (!user?.is_admin) {
     return (
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
-      >
-        <ScrollView contentContainerStyle={styles.loginContent}>
-          <View style={styles.loginCard}>
+      <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.lockCard}>
             <Text style={styles.lockIcon}>🔒</Text>
-            <Text style={styles.loginTitle}>Admin Access</Text>
-            <Text style={styles.loginSubtitle}>
-              Enter admin password to manage content
+            <Text style={styles.lockTitle}>Admin Access Only</Text>
+            <Text style={styles.lockText}>
+              You don't have admin privileges. If you should, please contact
+              BossLadyLisa to be promoted.
             </Text>
-
-            <TextInput
-              testID="admin-password-input"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Admin password"
-              placeholderTextColor="rgba(245,237,216,0.3)"
-              secureTextEntry
-              style={styles.input}
-              onSubmitEditing={handleLogin}
-            />
-
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-
             <TouchableOpacity
-              testID="admin-login-btn"
-              onPress={handleLogin}
-              disabled={loading}
-              style={[styles.button, loading && { opacity: 0.6 }]}
+              onPress={() => router.back()}
+              style={styles.backButton}
             >
-              <Text style={styles.buttonText}>
-                {loading ? 'Verifying…' : 'Enter Dashboard ✦'}
-              </Text>
+              <Text style={styles.backButtonText}>← Return to Sanctuary</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </View>
     );
   }
 
@@ -159,71 +159,116 @@ export default function AdminDashboard() {
         <PageHeader
           icon="👑"
           title="Admin Dashboard"
-          subtitle="Content moderation & app oversight"
+          subtitle={`Signed in as ${user.email}`}
         />
 
-        {/* Tabs */}
         <View style={styles.tabs}>
-          {(['overview', 'moderation', 'log'] as const).map((tab) => (
+          {(['overview', 'users', 'moderate', 'log'] as const).map((t) => (
             <TouchableOpacity
-              key={tab}
-              testID={`admin-tab-${tab}`}
-              style={[
-                styles.tab,
-                activeTab === tab && styles.tabActive,
-              ]}
-              onPress={() => setActiveTab(tab)}
+              key={t}
+              testID={`admin-tab-${t}`}
+              onPress={() => setTab(t)}
+              style={[styles.tab, tab === t && styles.tabActive]}
             >
-              <Text
-                style={[
-                  styles.tabText,
-                  activeTab === tab && styles.tabTextActive,
-                ]}
-              >
-                {tab === 'overview' ? '📊 Overview' : tab === 'moderation' ? '⚖️ Moderate' : '📜 Log'}
+              <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
+                {t === 'overview' ? '📊' : t === 'users' ? '👥' : t === 'moderate' ? '⚖️' : '📜'}{' '}
+                {t.charAt(0).toUpperCase() + t.slice(1)}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {activeTab === 'overview' && stats && (
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        {tab === 'overview' && stats && (
           <View>
             <View style={styles.statsGrid}>
-              <StatCard label="Journal Entries" value={stats.journal_entries} theme={theme} styles={styles} />
-              <StatCard label="Life Notes" value={stats.life_notes} theme={theme} styles={styles} />
-              <StatCard label="Tasks" value={stats.tasks} theme={theme} styles={styles} />
-              <StatCard label="Affirmations" value={stats.affirmations} theme={theme} styles={styles} />
-              <StatCard label="Feedback" value={stats.feedback} theme={theme} styles={styles} />
-              <StatCard label="Mood Entries" value={stats.mood_entries} theme={theme} styles={styles} />
-            </View>
-
-            <View style={styles.totalCard}>
-              <Text style={styles.totalLabel}>Total User-Generated Content</Text>
-              <Text style={styles.totalValue}>{stats.total_content}</Text>
+              <StatCard label="Total Users" value={stats.users} theme={theme} />
+              <StatCard label="Premium Users" value={stats.premium_users} theme={theme} />
+              <StatCard label="Admins" value={stats.admins} theme={theme} />
+              <StatCard label="Journal Entries" value={stats.journal_entries} theme={theme} />
+              <StatCard label="Life Notes" value={stats.life_notes} theme={theme} />
+              <StatCard label="Tasks" value={stats.tasks} theme={theme} />
+              <StatCard label="Affirmations" value={stats.affirmations} theme={theme} />
+              <StatCard label="Feedback" value={stats.feedback} theme={theme} />
+              <StatCard label="Mood Entries" value={stats.mood_entries} theme={theme} />
             </View>
           </View>
         )}
 
-        {activeTab === 'moderation' && (
+        {tab === 'users' && (
+          <View>
+            <Text style={styles.sectionTitle}>👥 Manage Users</Text>
+            {users.map((u) => (
+              <View key={u.user_id} style={styles.userCard}>
+                <View style={styles.userHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.userEmail}>
+                      {u.email}
+                      {u.user_id === user.user_id && ' (You)'}
+                    </Text>
+                    {u.name && <Text style={styles.userName}>{u.name}</Text>}
+                    <View style={styles.badges}>
+                      {u.is_admin && (
+                        <View style={styles.adminBadge}>
+                          <Text style={styles.adminBadgeText}>👑 Admin</Text>
+                        </View>
+                      )}
+                      <View
+                        style={[
+                          styles.tierBadge,
+                          u.subscription_tier === 'premium' && styles.tierBadgePremium,
+                        ]}
+                      >
+                        <Text style={styles.tierBadgeText}>
+                          {u.subscription_tier === 'premium' ? '✨ Premium' : '🌱 Free'}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.userActions}>
+                  <TouchableOpacity
+                    testID={`toggle-admin-${u.user_id}`}
+                    onPress={() => toggleAdmin(u.user_id, u.is_admin)}
+                    style={styles.actionBtn}
+                  >
+                    <Text style={styles.actionBtnText}>
+                      {u.is_admin ? 'Revoke Admin' : 'Make Admin'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    testID={`toggle-premium-${u.user_id}`}
+                    onPress={() => togglePremium(u.user_id, u.subscription_tier)}
+                    style={styles.actionBtn}
+                  >
+                    <Text style={styles.actionBtnText}>
+                      {u.subscription_tier === 'premium' ? 'Set Free' : 'Grant Premium'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {tab === 'moderate' && (
           <View>
             <Text style={styles.sectionTitle}>💌 User Feedback</Text>
-            <Text style={styles.sectionSubtitle}>
-              Review and remove inappropriate feedback
-            </Text>
-
             {feedback.length === 0 ? (
               <Text style={styles.emptyText}>No feedback yet.</Text>
             ) : (
               feedback.map((item) => (
                 <View key={item.id} style={styles.moderationCard}>
-                  <Text style={styles.moderationTime}>{item.time}</Text>
+                  <Text style={styles.moderationTime}>
+                    {item.time} {item.user_email && `· ${item.user_email}`}
+                  </Text>
                   <Text style={styles.moderationText}>"{item.text}"</Text>
                   <TouchableOpacity
-                    testID={`remove-feedback-${item.id}`}
-                    onPress={() => handleRemove('feedback', item.id)}
-                    style={styles.removeButton}
+                    onPress={() => removeContent('feedback', item.id)}
+                    style={styles.removeBtn}
                   >
-                    <Text style={styles.removeButtonText}>✕ Remove</Text>
+                    <Text style={styles.removeBtnText}>✕ Remove</Text>
                   </TouchableOpacity>
                 </View>
               ))
@@ -231,161 +276,32 @@ export default function AdminDashboard() {
           </View>
         )}
 
-        {activeTab === 'log' && (
+        {tab === 'log' && (
           <View>
             <Text style={styles.sectionTitle}>📜 Moderation Log</Text>
-            <Text style={styles.sectionSubtitle}>
-              Audit trail of all admin actions
-            </Text>
-
-            {moderationLog.length === 0 ? (
+            {log.length === 0 ? (
               <Text style={styles.emptyText}>No moderation actions yet.</Text>
             ) : (
-              moderationLog.map((entry) => (
+              log.map((entry) => (
                 <View key={entry.id} style={styles.logEntry}>
-                  <View style={styles.logHeader}>
-                    <Text style={styles.logType}>
-                      {entry.content_type.toUpperCase()}
-                    </Text>
-                    <Text style={styles.logTime}>
-                      {new Date(entry.timestamp).toLocaleString()}
-                    </Text>
-                  </View>
-                  <Text style={styles.logReason}>Reason: {entry.reason}</Text>
-                  <Text style={styles.logId}>Item ID: {entry.item_id}</Text>
+                  <Text style={styles.logType}>{entry.content_type.toUpperCase()}</Text>
+                  <Text style={styles.logMeta}>
+                    {new Date(entry.timestamp).toLocaleString()} · {entry.admin_email || 'admin'}
+                  </Text>
+                  <Text style={styles.logReason}>{entry.reason}</Text>
                 </View>
               ))
             )}
           </View>
         )}
-
-        <TouchableOpacity
-          testID="admin-logout-btn"
-          onPress={() => {
-            setIsAuthenticated(false);
-            setPassword('');
-            setStats(null);
-            setFeedback([]);
-            setModerationLog([]);
-          }}
-          style={styles.logoutButton}
-        >
-          <Text style={styles.logoutText}>Sign Out</Text>
-        </TouchableOpacity>
       </ScrollView>
     </View>
   );
 }
 
-const StatCard = ({ label, value, theme, styles }: any) => (
-  <View style={styles.statCard}>
-    <Text style={styles.statValue}>{value}</Text>
-    <Text style={styles.statLabel}>{label}</Text>
-  </View>
-);
-
-const makeStyles = (theme: Theme) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.teal,
-    },
-    content: {
-      padding: 24,
-      paddingBottom: 40,
-    },
-    loginContent: {
-      flexGrow: 1,
-      justifyContent: 'center',
-      padding: 24,
-    },
-    loginCard: {
-      backgroundColor: theme.glass,
-      borderWidth: 1,
-      borderColor: theme.glassBdr,
-      borderRadius: 24,
-      padding: 32,
-      alignItems: 'center',
-    },
-    lockIcon: {
-      fontSize: 48,
-      marginBottom: 16,
-    },
-    loginTitle: {
-      fontSize: 24,
-      fontWeight: '600',
-      color: theme.goldLt,
-      marginBottom: 8,
-    },
-    loginSubtitle: {
-      fontSize: 13,
-      color: theme.cream,
-      opacity: 0.7,
-      textAlign: 'center',
-      marginBottom: 24,
-    },
-    input: {
-      width: '100%',
-      backgroundColor: 'rgba(255,255,255,0.06)',
-      borderWidth: 1,
-      borderColor: theme.glassBdr,
-      borderRadius: 12,
-      color: theme.cream,
-      fontSize: 14,
-      padding: 14,
-      marginBottom: 16,
-    },
-    error: {
-      color: '#ff8080',
-      fontSize: 13,
-      marginBottom: 12,
-      textAlign: 'center',
-    },
-    button: {
-      width: '100%',
-      backgroundColor: theme.gold,
-      borderRadius: 30,
-      padding: 14,
-      alignItems: 'center',
-    },
-    buttonText: {
-      color: theme.teal,
-      fontSize: 14,
-      fontWeight: '700',
-    },
-    tabs: {
-      flexDirection: 'row',
-      gap: 8,
-      marginBottom: 20,
-    },
-    tab: {
-      flex: 1,
-      backgroundColor: theme.glass,
-      borderWidth: 1,
-      borderColor: theme.glassBdr,
-      borderRadius: 20,
-      paddingVertical: 10,
-      alignItems: 'center',
-    },
-    tabActive: {
-      backgroundColor: theme.terra,
-      borderColor: theme.gold,
-    },
-    tabText: {
-      fontSize: 12,
-      color: theme.cream,
-      fontWeight: '600',
-    },
-    tabTextActive: {
-      color: '#fff',
-    },
-    statsGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 10,
-      marginBottom: 20,
-    },
-    statCard: {
+const StatCard = ({ label, value, theme }: any) => (
+  <View
+    style={{
       width: '48%',
       backgroundColor: theme.glass,
       borderWidth: 1,
@@ -393,58 +309,103 @@ const makeStyles = (theme: Theme) =>
       borderRadius: 14,
       padding: 16,
       alignItems: 'center',
+      marginBottom: 8,
+    }}
+  >
+    <Text style={{ fontSize: 26, fontWeight: '700', color: theme.goldLt }}>
+      {value}
+    </Text>
+    <Text style={{ fontSize: 11, color: theme.cream, opacity: 0.7, marginTop: 4 }}>
+      {label}
+    </Text>
+  </View>
+);
+
+const makeStyles = (theme: Theme) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.teal },
+    content: { padding: 24, paddingBottom: 40 },
+    tabs: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+      marginBottom: 20,
     },
-    statValue: {
-      fontSize: 28,
-      fontWeight: '700',
-      color: theme.goldLt,
-      marginBottom: 4,
-    },
-    statLabel: {
-      fontSize: 11,
-      color: theme.cream,
-      opacity: 0.7,
-      textAlign: 'center',
-    },
-    totalCard: {
-      backgroundColor: 'rgba(232,184,77,0.15)',
+    tab: {
+      flex: 1,
+      minWidth: '22%',
+      backgroundColor: theme.glass,
       borderWidth: 1,
-      borderColor: theme.gold,
-      borderRadius: 16,
-      padding: 20,
+      borderColor: theme.glassBdr,
+      borderRadius: 18,
+      paddingVertical: 8,
       alignItems: 'center',
     },
-    totalLabel: {
-      fontSize: 12,
-      color: theme.cream,
-      opacity: 0.8,
-      marginBottom: 6,
+    tabActive: {
+      backgroundColor: theme.terra,
+      borderColor: theme.gold,
     },
-    totalValue: {
-      fontSize: 36,
-      fontWeight: '700',
-      color: theme.gold,
-    },
+    tabText: { fontSize: 11, color: theme.cream, fontWeight: '600' },
+    tabTextActive: { color: '#fff' },
+    error: { color: '#ff8080', fontSize: 13, marginBottom: 12 },
+    statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     sectionTitle: {
-      fontSize: 18,
+      fontSize: 16,
       color: theme.goldLt,
       fontWeight: '600',
-      marginBottom: 4,
-    },
-    sectionSubtitle: {
-      fontSize: 12,
-      color: theme.cream,
-      opacity: 0.6,
-      marginBottom: 16,
+      marginBottom: 10,
     },
     emptyText: {
-      fontSize: 13,
       color: theme.cream,
       opacity: 0.5,
       fontStyle: 'italic',
       textAlign: 'center',
-      paddingVertical: 24,
+      padding: 20,
     },
+    userCard: {
+      backgroundColor: theme.glass,
+      borderWidth: 1,
+      borderColor: theme.glassBdr,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 10,
+    },
+    userHeader: { marginBottom: 10 },
+    userEmail: { color: theme.goldLt, fontSize: 14, fontWeight: '600' },
+    userName: { color: theme.cream, opacity: 0.7, fontSize: 12, marginTop: 2 },
+    badges: { flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' },
+    adminBadge: {
+      backgroundColor: 'rgba(232,184,77,0.2)',
+      borderWidth: 1,
+      borderColor: theme.gold,
+      borderRadius: 12,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+    },
+    adminBadgeText: { color: theme.gold, fontSize: 10, fontWeight: '700' },
+    tierBadge: {
+      backgroundColor: 'rgba(255,255,255,0.06)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.15)',
+      borderRadius: 12,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+    },
+    tierBadgePremium: {
+      backgroundColor: 'rgba(232,184,77,0.15)',
+      borderColor: theme.gold,
+    },
+    tierBadgeText: { color: theme.cream, fontSize: 10, fontWeight: '600' },
+    userActions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+    actionBtn: {
+      backgroundColor: 'rgba(255,255,255,0.06)',
+      borderWidth: 1,
+      borderColor: theme.glassBdr,
+      borderRadius: 20,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+    },
+    actionBtnText: { color: theme.cream, fontSize: 11, fontWeight: '600' },
     moderationCard: {
       backgroundColor: theme.glass,
       borderWidth: 1,
@@ -459,13 +420,12 @@ const makeStyles = (theme: Theme) =>
       marginBottom: 6,
     },
     moderationText: {
-      fontSize: 13,
       color: theme.cream,
-      lineHeight: 20,
+      fontSize: 13,
       fontStyle: 'italic',
-      marginBottom: 10,
+      marginBottom: 8,
     },
-    removeButton: {
+    removeBtn: {
       alignSelf: 'flex-start',
       backgroundColor: 'rgba(255,80,80,0.15)',
       borderWidth: 1,
@@ -474,11 +434,7 @@ const makeStyles = (theme: Theme) =>
       paddingVertical: 4,
       paddingHorizontal: 10,
     },
-    removeButtonText: {
-      color: 'rgba(255,120,120,0.9)',
-      fontSize: 12,
-      fontWeight: '600',
-    },
+    removeBtnText: { color: 'rgba(255,120,120,0.9)', fontSize: 11, fontWeight: '600' },
     logEntry: {
       backgroundColor: theme.glass,
       borderWidth: 1,
@@ -487,45 +443,38 @@ const makeStyles = (theme: Theme) =>
       padding: 12,
       marginBottom: 8,
     },
-    logHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      marginBottom: 6,
-    },
-    logType: {
-      fontSize: 11,
-      color: theme.gold,
-      fontWeight: '700',
-      letterSpacing: 1,
-    },
-    logTime: {
-      fontSize: 10,
-      color: theme.cream,
-      opacity: 0.5,
-    },
-    logReason: {
-      fontSize: 12,
-      color: theme.cream,
-      marginBottom: 4,
-    },
-    logId: {
-      fontSize: 10,
-      color: theme.cream,
-      opacity: 0.4,
-      fontFamily: 'monospace',
-    },
-    logoutButton: {
-      alignSelf: 'center',
-      marginTop: 24,
-      paddingVertical: 10,
-      paddingHorizontal: 20,
+    logType: { color: theme.gold, fontSize: 10, fontWeight: '700', letterSpacing: 1 },
+    logMeta: { color: theme.cream, opacity: 0.6, fontSize: 10, marginTop: 4 },
+    logReason: { color: theme.cream, fontSize: 12, marginTop: 4 },
+    lockCard: {
+      backgroundColor: theme.glass,
       borderWidth: 1,
       borderColor: theme.glassBdr,
       borderRadius: 20,
+      padding: 32,
+      alignItems: 'center',
+      marginTop: 60,
     },
-    logoutText: {
+    lockIcon: { fontSize: 48, marginBottom: 16 },
+    lockTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: theme.goldLt,
+      marginBottom: 12,
+    },
+    lockText: {
       color: theme.cream,
       opacity: 0.7,
-      fontSize: 12,
+      textAlign: 'center',
+      lineHeight: 20,
+      marginBottom: 24,
     },
+    backButton: {
+      paddingVertical: 10,
+      paddingHorizontal: 20,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: theme.glassBdr,
+    },
+    backButtonText: { color: theme.cream, opacity: 0.8 },
   });

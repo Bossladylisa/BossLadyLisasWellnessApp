@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Redirect } from 'expo-router';
 import {
   View,
   Text,
@@ -11,6 +12,7 @@ import {
 } from 'react-native';
 import { PageHeader } from '../src/components/PageHeader';
 import { useTheme } from '../src/store/useTheme';
+import { useAuth } from '../src/store/useAuth';
 import { Theme } from '../src/constants/themes';
 import { api } from '../src/services/api';
 
@@ -22,6 +24,8 @@ interface LifeNote {
 export default function NotesPage() {
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
+
+  const { user: _authUser } = useAuth();
   const [notes, setNotes] = useState<LifeNote[]>([]);
   const [note, setNote] = useState('');
 
@@ -57,6 +61,8 @@ export default function NotesPage() {
       console.error('Failed to delete note:', error);
     }
   };
+
+  if (!_authUser) return <Redirect href="/login" />;
 
   return (
     <KeyboardAvoidingView

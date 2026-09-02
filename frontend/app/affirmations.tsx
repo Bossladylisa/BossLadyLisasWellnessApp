@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Redirect } from 'expo-router';
 import {
   View,
   Text,
@@ -11,6 +12,7 @@ import {
 } from 'react-native';
 import { PageHeader } from '../src/components/PageHeader';
 import { useTheme } from '../src/store/useTheme';
+import { useAuth } from '../src/store/useAuth';
 import { Theme } from '../src/constants/themes';
 import { api } from '../src/services/api';
 
@@ -22,6 +24,8 @@ interface Affirmation {
 export default function AffirmationsPage() {
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
+
+  const { user: _authUser } = useAuth();
   const [affirmations, setAffirmations] = useState<Affirmation[]>([]);
   const [newAff, setNewAff] = useState('');
   const [displayed, setDisplayed] = useState<string | null>(null);
@@ -100,6 +104,8 @@ export default function AffirmationsPage() {
     }
   };
 
+  if (!_authUser) return <Redirect href="/login" />;
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -138,6 +144,24 @@ export default function AffirmationsPage() {
         <View style={styles.divider} />
 
         <Text style={styles.sectionTitle}>Manage Your Collection</Text>
+
+        <TouchableOpacity
+          onPress={async () => {
+            try {
+              const res = await api.generateAIAffirmation();
+              if (res?.affirmation) {
+                setNewAff(res.affirmation);
+              }
+            } catch (e) {
+              console.error('AI affirmation failed', e);
+            }
+          }}
+          style={styles.aiGenBtn}
+          activeOpacity={0.75}
+        >
+          <Text style={styles.aiGenBtnText}>✨ Craft One With AI (Claude)</Text>
+        </TouchableOpacity>
+
         <View style={styles.inputRow}>
           <TextInput
             value={newAff}
@@ -314,5 +338,20 @@ const makeStyles = (theme: Theme) => StyleSheet.create({
   deleteText: {
     color: 'rgba(255,120,120,0.8)',
     fontSize: 16,
+  },
+  aiGenBtn: {
+    backgroundColor: 'rgba(232,184,77,0.15)',
+    borderWidth: 1,
+    borderColor: theme.gold,
+    borderRadius: 30,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  aiGenBtnText: {
+    color: theme.goldLt,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.4,
   },
 });

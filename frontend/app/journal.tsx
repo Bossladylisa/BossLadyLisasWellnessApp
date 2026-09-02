@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Redirect, useRouter } from 'expo-router';
 import {
   View,
   Text,
@@ -8,9 +9,11 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { PageHeader } from '../src/components/PageHeader';
 import { useTheme } from '../src/store/useTheme';
+import { useAuth } from '../src/store/useAuth';
 import { Theme } from '../src/constants/themes';
 import { api } from '../src/services/api';
 
@@ -22,10 +25,16 @@ interface JournalEntry {
 
 export default function JournalPage() {
   const theme = useTheme();
+  const router = useRouter();
   const styles = useMemo(() => makeStyles(theme), [theme]);
+
+  const { user: _authUser } = useAuth();
   const [journal, setJournal] = useState<JournalEntry[]>([]);
   const [entry, setEntry] = useState('');
   const [search, setSearch] = useState('');
+  const [insights, setInsights] = useState<string | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [insightsError, setInsightsError] = useState<string | null>(null);
 
   useEffect(() => {
     loadJournalEntries();
@@ -60,9 +69,30 @@ export default function JournalPage() {
     }
   };
 
+  const getInsights = async () => {
+    setInsightsLoading(true);
+    setInsightsError(null);
+    setInsights(null);
+    try {
+      const res = await api.generateJournalInsights();
+      if (res?.insights) {
+        setInsights(res.insights);
+      } else if (res?.detail) {
+        setInsightsError(res.detail);
+      } else {
+        setInsightsError('Could not generate insights right now.');
+      }
+    } catch (e: any) {
+      setInsightsError('Could not generate insights right now.');
+    }
+    setInsightsLoading(false);
+  };
+
   const filtered = journal.filter((e) =>
     e.text.toLowerCase().includes(search.toLowerCase())
   );
+
+  if (!_authUser) return <Redirect href="/login" />;
 
   return (
     <KeyboardAvoidingView
@@ -94,6 +124,38 @@ export default function JournalPage() {
 
         {journal.length > 0 && (
           <>
+            <TouchableOpacity
+              onPress={getInsights}
+              disabled={insightsLoading}
+              style={styles.insightsBtn}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.insightsBtnText}>
+                {insightsLoading ? '✨ Reflecting…' : '✨ Weekly AI Reflection'}
+              </Text>
+            </TouchableOpacity>
+
+            {insightsError && (
+              <View style={styles.insightsError}>
+                <Text style={styles.insightsErrorText}>{insightsError}</Text>
+                {insightsError.toLowerCase().includes('limit') && (
+                  <TouchableOpacity
+                    onPress={() => router.push('/upgrade' as any)}
+                    style={styles.insightsUpgradeBtn}
+                  >
+                    <Text style={styles.insightsUpgradeText}>✨ Upgrade to Premium</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
+            {insights && (
+              <View style={styles.insightsCard}>
+                <Text style={styles.insightsLabel}>✦ This Week's Reflection</Text>
+                <Text style={styles.insightsText}>{insights}</Text>
+              </View>
+            )}
+
             <TextInput
               value={search}
               onChangeText={setSearch}
@@ -229,5 +291,65 @@ const makeStyles = (theme: Theme) => StyleSheet.create({
     color: 'rgba(245,237,216,0.35)',
     fontStyle: 'italic',
     fontSize: 14,
+  },
+  insightsBtn: {
+    backgroundColor: 'rgba(232,184,77,0.15)',
+    borderWidth: 1,
+    borderColor: theme.gold,
+    borderRadius: 30,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  insightsBtnText: {
+    color: theme.goldLt,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+  insightsCard: {
+    backgroundColor: theme.terraDk,
+    borderRadius: 18,
+    padding: 20,
+    marginBottom: 18,
+  },
+  insightsLabel: {
+    fontSize: 11,
+    color: theme.terraLt,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 12,
+  },
+  insightsText: {
+    color: theme.cream,
+    fontSize: 14,
+    lineHeight: 24,
+  },
+  insightsError: {
+    backgroundColor: 'rgba(255,120,120,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,120,120,0.3)',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    alignItems: 'center',
+  },
+  insightsErrorText: {
+    color: theme.cream,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+  insightsUpgradeBtn: {
+    marginTop: 10,
+    backgroundColor: theme.gold,
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+  },
+  insightsUpgradeText: {
+    color: theme.teal,
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

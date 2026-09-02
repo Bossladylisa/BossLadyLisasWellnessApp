@@ -33,9 +33,10 @@ A comprehensive wellness & community app that helps users beautify themselves fr
 ## Tech Stack
 - **Frontend:** Expo/React Native with expo-router (Stack Navigation)
 - **Backend:** FastAPI + MongoDB
-- **AI:** Claude Sonnet 4.6 (via Emergent LLM Key)
-- **Auth (Planned):** Emergent Google OAuth + JWT email/password
-- **Payments (Planned):** Stripe subscriptions
+- **AI:** Claude Sonnet 5 (via Emergent LLM Key) — powers Reset Toolkit, Journal Weekly Reflection, AI Affirmation Generator, and Community content moderation
+- **AI Access:** Free tier = 3 AI calls/day, Premium = unlimited
+- **Auth:** Emergent Google OAuth
+- **Payments:** Stripe subscriptions ($4.99/mo Premium)
 
 ## Subscription Tiers (Planned)
 - **🌱 Sanctuary Seed** (Free): Basic tools + public community blooms

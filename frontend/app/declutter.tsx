@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Redirect } from 'expo-router';
 import {
   View,
   Text,
@@ -9,6 +10,7 @@ import {
 } from 'react-native';
 import { PageHeader } from '../src/components/PageHeader';
 import { useTheme } from '../src/store/useTheme';
+import { useAuth } from '../src/store/useAuth';
 import { Theme } from '../src/constants/themes';
 import { DECLUTTER_ITEMS } from '../src/constants/data';
 import { api } from '../src/services/api';
@@ -16,6 +18,8 @@ import { api } from '../src/services/api';
 export default function DeclutterPage() {
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
+
+  const { user: _authUser } = useAuth();
   const [declutter, setDeclutter] = useState<Record<string, boolean>>({});
   const [timerDur, setTimerDur] = useState(5);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
@@ -75,6 +79,8 @@ export default function DeclutterPage() {
       2,
       '0'
     )}`;
+
+  if (!_authUser) return <Redirect href="/login" />;
 
   return (
     <View style={styles.container}>

@@ -1,145 +1,82 @@
-const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL + '/api';
+import { authFetch } from '../store/useAuth';
 
 export const api = {
   // Mood
-  getMoodHistory: async () => {
-    const res = await fetch(`${API_BASE}/mood`);
-    return res.json();
-  },
-  createMoodEntry: async (mood: string, color: string) => {
-    const res = await fetch(`${API_BASE}/mood`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mood, color }),
-    });
-    return res.json();
-  },
+  getMoodHistory: async () => (await authFetch('/mood')).json(),
+  createMoodEntry: async (mood: string, color: string) =>
+    (await authFetch('/mood', { method: 'POST', body: JSON.stringify({ mood, color }) })).json(),
 
   // Journal
-  getJournalEntries: async () => {
-    const res = await fetch(`${API_BASE}/journal`);
-    return res.json();
-  },
-  createJournalEntry: async (text: string) => {
-    const res = await fetch(`${API_BASE}/journal`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    });
-    return res.json();
-  },
+  getJournalEntries: async () => (await authFetch('/journal')).json(),
+  createJournalEntry: async (text: string) =>
+    (await authFetch('/journal', { method: 'POST', body: JSON.stringify({ text }) })).json(),
   deleteJournalEntry: async (id: string) => {
-    await fetch(`${API_BASE}/journal/${id}`, { method: 'DELETE' });
+    await authFetch(`/journal/${id}`, { method: 'DELETE' });
   },
 
   // Notes
-  getLifeNotes: async () => {
-    const res = await fetch(`${API_BASE}/notes`);
-    return res.json();
-  },
-  createLifeNote: async (text: string) => {
-    const res = await fetch(`${API_BASE}/notes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    });
-    return res.json();
-  },
+  getLifeNotes: async () => (await authFetch('/notes')).json(),
+  createLifeNote: async (text: string) =>
+    (await authFetch('/notes', { method: 'POST', body: JSON.stringify({ text }) })).json(),
   deleteLifeNote: async (id: string) => {
-    await fetch(`${API_BASE}/notes/${id}`, { method: 'DELETE' });
+    await authFetch(`/notes/${id}`, { method: 'DELETE' });
   },
 
-  // Tasks
-  getTasks: async () => {
-    const res = await fetch(`${API_BASE}/tasks`);
-    return res.json();
-  },
-  createTask: async (text: string, priority: string) => {
-    const res = await fetch(`${API_BASE}/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, priority }),
-    });
-    return res.json();
-  },
-  updateTask: async (id: string, completed: boolean) => {
-    const res = await fetch(`${API_BASE}/tasks/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ completed }),
-    });
-    return res.json();
-  },
+  // Tasks (Premium)
+  getTasks: async () => (await authFetch('/tasks')).json(),
+  createTask: async (text: string, priority: string) =>
+    (await authFetch('/tasks', { method: 'POST', body: JSON.stringify({ text, priority }) })).json(),
+  updateTask: async (id: string, completed: boolean) =>
+    (await authFetch(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ completed }) })).json(),
   deleteTask: async (id: string) => {
-    await fetch(`${API_BASE}/tasks/${id}`, { method: 'DELETE' });
+    await authFetch(`/tasks/${id}`, { method: 'DELETE' });
   },
 
-  // Affirmations
-  getAffirmations: async () => {
-    const res = await fetch(`${API_BASE}/affirmations`);
-    return res.json();
-  },
-  createAffirmation: async (text: string) => {
-    const res = await fetch(`${API_BASE}/affirmations`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    });
-    return res.json();
-  },
+  // Affirmations (Premium)
+  getAffirmations: async () => (await authFetch('/affirmations')).json(),
+  createAffirmation: async (text: string) =>
+    (await authFetch('/affirmations', { method: 'POST', body: JSON.stringify({ text }) })).json(),
   deleteAffirmation: async (id: string) => {
-    await fetch(`${API_BASE}/affirmations/${id}`, { method: 'DELETE' });
+    await authFetch(`/affirmations/${id}`, { method: 'DELETE' });
   },
 
   // Feedback
-  getFeedback: async () => {
-    const res = await fetch(`${API_BASE}/feedback`);
-    return res.json();
-  },
-  createFeedback: async (text: string) => {
-    const res = await fetch(`${API_BASE}/feedback`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    });
-    return res.json();
-  },
+  getFeedback: async () => (await authFetch('/feedback')).json(),
+  createFeedback: async (text: string) =>
+    (await authFetch('/feedback', { method: 'POST', body: JSON.stringify({ text }) })).json(),
 
-  // Declutter
-  getDeclutterState: async () => {
-    const res = await fetch(`${API_BASE}/declutter`);
-    return res.json();
-  },
-  updateDeclutterState: async (items: Record<string, boolean>) => {
-    const res = await fetch(`${API_BASE}/declutter`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items }),
-    });
-    return res.json();
-  },
+  // Declutter (Premium)
+  getDeclutterState: async () => (await authFetch('/declutter')).json(),
+  updateDeclutterState: async (items: Record<string, boolean>) =>
+    (await authFetch('/declutter', { method: 'PUT', body: JSON.stringify({ items }) })).json(),
 
-  // Stats
-  getUserStats: async () => {
-    const res = await fetch(`${API_BASE}/stats`);
-    return res.json();
-  },
-  updateUserStats: async (affirmation_streak: number, last_affirmation_date: string) => {
-    const res = await fetch(`${API_BASE}/stats`, {
+  // Stats (Premium)
+  getUserStats: async () => (await authFetch('/stats')).json(),
+  updateUserStats: async (affirmation_streak: number, last_affirmation_date: string) =>
+    (await authFetch('/stats', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ affirmation_streak, last_affirmation_date }),
-    });
-    return res.json();
-  },
+    })).json(),
 
-  // AI
-  generateAIReset: async (mood: string) => {
-    const res = await fetch(`${API_BASE}/ai/reset`, {
+  // AI (Claude Sonnet 5 · Free 3/day, Premium unlimited)
+  generateAIReset: async (mood: string) =>
+    await authFetch('/ai/reset', { method: 'POST', body: JSON.stringify({ mood }) }),
+  getAIUsage: async () => (await authFetch('/ai/usage')).json(),
+  generateJournalInsights: async () =>
+    (await authFetch('/ai/journal-insights', { method: 'POST', body: JSON.stringify({}) })).json(),
+  generateAIAffirmation: async (theme?: string) =>
+    (await authFetch('/ai/affirmation', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mood }),
-    });
-    return res;
-  },
+      body: JSON.stringify({ theme: theme || null }),
+    })).json(),
+  moderateText: async (text: string) =>
+    (await authFetch('/ai/moderate', { method: 'POST', body: JSON.stringify({ text }) })).json(),
+
+  // Subscription
+  getSubscription: async () => (await authFetch('/me/subscription')).json(),
+  createCheckout: async (returnTo: string) =>
+    (await authFetch('/stripe/create-checkout-session', {
+      method: 'POST',
+      body: JSON.stringify({ return_to: returnTo }),
+    })).json(),
 };

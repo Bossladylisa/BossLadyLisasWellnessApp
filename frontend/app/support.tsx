@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { Redirect } from 'expo-router';
 import {
   View,
   Text,
@@ -10,6 +11,7 @@ import {
 } from 'react-native';
 import { PageHeader } from '../src/components/PageHeader';
 import { useTheme } from '../src/store/useTheme';
+import { useAuth } from '../src/store/useAuth';
 import { Theme } from '../src/constants/themes';
 import { DragonflyIcon } from '../src/components/DragonflyIcon';
 
@@ -82,6 +84,8 @@ export default function SupportPage() {
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
 
+  const { user: _authUser } = useAuth();
+
   const handleCall = (phone?: string) => {
     if (!phone) return;
     Linking.openURL(`tel:${phone}`);
@@ -92,6 +96,8 @@ export default function SupportPage() {
     const url = Platform.OS === 'ios' ? `sms:${number}` : `sms:${number}`;
     Linking.openURL(url);
   };
+
+  if (!_authUser) return <Redirect href="/login" />;
 
   return (
     <View style={styles.container}>

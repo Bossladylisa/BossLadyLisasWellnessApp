@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { Redirect } from 'expo-router';
 import {
   View,
   Text,
@@ -8,12 +9,15 @@ import {
 } from 'react-native';
 import { PageHeader } from '../src/components/PageHeader';
 import { useTheme } from '../src/store/useTheme';
+import { useAuth } from '../src/store/useAuth';
 import { Theme } from '../src/constants/themes';
 import { DEFAULT_AFFIRMATIONS } from '../src/constants/data';
 
 export default function QuotesPage() {
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
+
+  const { user: _authUser } = useAuth();
   const [quote, setQuote] = useState(DEFAULT_AFFIRMATIONS[0]);
 
   const random = () => {
@@ -21,6 +25,8 @@ export default function QuotesPage() {
       DEFAULT_AFFIRMATIONS[Math.floor(Math.random() * DEFAULT_AFFIRMATIONS.length)];
     setQuote(randomQuote);
   };
+
+  if (!_authUser) return <Redirect href="/login" />;
 
   return (
     <View style={styles.container}>

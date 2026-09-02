@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 4 verifies the LinkingContext bug fix and the new Sacred Rhythm premium feature. Backend: 29/29 pytest tests PASS (unchanged suite from iteration_3, re-run) — all /api/auth, /api/journal, /api/notes, /api/feedback, /api/mood (free), /api/tasks, /api/affirmations, /api/declutter, /api/stats, /api/ai/reset (premium), /api/admin/* (admin), /api/stripe/create-checkout-session correctly return 401 without Bearer token, /api/auth/logout is idempotent, slowapi Limiter is imported & wired on /api/ai/reset. Frontend: /login loads cleanly on mobile viewport (375x667) with ZERO LinkingContext errors, zero pageerror events, zero console errors, and no red screen. All required elements render: DragonflyIcon SVG, BEAUTIFY / Yourself / AND BEYOND title, 'Continue with Google' TouchableOpacity (261x51 touch target, ≥44pt), disclaimer text 'wellness companion — not a substitute for licensed medical care'. Deep-link guard for premium routes still works — direct GET on /rhythm while unauthenticated redirects to /login (as expected via <Redirect href='/login' /> in rhythm.tsx). Sacred Rhythm files verified structurally: (1) /app/frontend/app/rhythm.tsx exists (valid TSX, 579 lines, uses View/Text/TouchableOpacity/TextInput/Switch/ScrollView/KeyboardAvoidingView; testIDs: rhythm-upgrade-btn, focus-minutes-input, break-minutes-input, cycles-input, start-focus-btn, end-focus-btn, toggle-reminder-<id>); (2) /app/frontend/src/utils/notifications.ts exists and exports requestPermissions, scheduleReminder, cancelReminder, cancelAllReminders, scheduleFocusSession, loadReminders, saveReminders + Reminder type — all called correctly from rhythm.tsx; (3) app.json plugins include 'expo-notifications' with icon/color config; iOS NSUserNotificationsUsageDescription set; Android permissions include POST_NOTIFICATIONS and SCHEDULE_EXACT_ALARM; (4) _layout.tsx registers Stack.Screen name='rhythm' with title 'Sacred Rhythm'; (5) index.tsx PREMIUM_FEATURE_IDS = ['reset','planner','declutter','affirmations','rhythm'] — 'rhythm' present, and a feature card entry with icon '⏱️', title 'Sacred Rhythm' is emitted so free users see the 🔒 lock. Web-fallback path in rhythm.tsx renders an info banner explaining notifications only work on mobile — cannot exercise the notification flow itself from the web preview (expo-notifications is a no-op on web / Platform.OS==='web' short-circuits every helper), which is the documented, expected behavior. Non-blocking noise unchanged from iteration_3: single 3rd-party 'props.pointerEvents is deprecated' warning from safe-area-context/gesture-handler, and the ℠ superscript renders as literal 'SM' next to 'BOSSLADYLISA'S' — brand nit already tracked.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "login", "issues": ["Brand ℠ still renders as literal 'SM' next to 'BOSSLADYLISA'S' (also on home, planner, life-notes, footer). Non-blocking — tracked from iteration_1."]}
+    ],
+    "react_native_issues": [
+      {"component": "3rd-party (react-native-safe-area-context / gesture-handler)", "issue": "Warning still present in console: 'props.pointerEvents is deprecated. Use style.pointerEvents'. Library-originated, non-blocking."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_auth_and_protection.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/iteration_3.json"
+  ],
+  "action_items": [
+    "(brand nit, low priority) Replace literal ℠ character with styled superscript <Text> across login/home/planner/life-notes/footer.",
+    "(cleanup, not blocking) Track safe-area-context / gesture-handler upgrade to silence 'props.pointerEvents is deprecated'.",
+    "(future validation, needs real device) Full expo-notifications flow (permission grant, actual reminder firing, focus-session chime cadence) cannot be exercised from the web preview — expo-notifications is a no-op on Platform.OS==='web'. Main agent should verify on iOS/Android build or Expo Go before ship."
+  ],
+  "critical_code_review_comments": [
+    "_layout.tsx fix is correct: root layout now renders <Stack> unconditionally on the first render tree, gated internally by authLoading with an <ActivityIndicator> fallback INSIDE the SafeAreaProvider/GestureHandlerRootView — no useRouter/useSegments/Redirect calls are made at the root before the Stack is mounted, so LinkingContext is always available when consumers ask for it. Verified in browser: zero pageerror events on /login.",
+    "notifications.ts guards every helper with `if (Platform.OS === 'web') return []` / `return` so the web preview will not crash; matches the info-banner UX in rhythm.tsx.",
+    "rhythm.tsx re-renders <Redirect href='/login' /> when !user — good deep-link guard consistent with the other pages.",
+    "scheduleFocusSession stores DATE-triggered notification IDs but does not persist them; endFocusSession calls cancelAllReminders which nukes ALL scheduled notifications (including the user's enabled daily reminders) then re-schedules only the enabled reminders. Correct end state, but is a heavy hammer — future improvement: track only the focus-session IDs and cancel just those.",
+    "rhythm.tsx uses `alert()` in startFocusSession — works on web but is not React Native idiomatic; consider Alert.alert() for parity across platforms.",
+    "expo-notifications 'plugins' block in app.json omits `androidMode` / `androidCollapsedTitle`; defaults are fine but flag for a production polish pass.",
+    "server.py is still 743 lines — approaching the 700-line soft limit; consider splitting auth, stripe, admin, and content routers into modules (unchanged from iteration_3)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (29/29)", "frontend": "100% of requested items pass"},
+  "seed_data_creation": "None — protected write paths still require a real Emergent Google session token; not exercisable from headless test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "LinkingContext bug is FIXED and verified on the live preview. Sacred Rhythm route/files/plugin config are all correctly wired. To test the notification flow end-to-end, an actual mobile build (Expo Go with a QR scan, or dev build) is required — the web preview will show the amber info banner and every schedule/cancel helper short-circuits. Preview URL: https://beautify-yourself.preview.emergentagent.com. Rhythm testIDs: rhythm-upgrade-btn (free lock CTA), focus-minutes-input, break-minutes-input, cycles-input, start-focus-btn, end-focus-btn, toggle-reminder-<reminder-id>. To exercise the premium view on a fresh install, sign in with a Google account via 'Continue with Google' — first user auto-becomes admin+premium and can immediately tap the ⏱️ Sacred Rhythm card from home.",
+  "rca_of_issue": "LinkingContext error (reported) — CONFIRMED FIXED. Root cause was consumers of expo-router's linking context (useRouter/useSegments/Redirect) being invoked at the root layout tree BEFORE the <Stack> that provides LinkingContext was mounted; the previous _layout.tsx returned different subtrees during authLoading which caused a mount/unmount race. The fix restructures _layout.tsx so that <SafeAreaProvider><GestureHandlerRootView> always render, and the authLoading branch swaps between an <ActivityIndicator> and the <Stack> inside that stable outer tree. Verified: 0 pageerror events, 0 console errors, 0 LinkingContext-mentioning messages captured on /login navigation."
+}
