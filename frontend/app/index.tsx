@@ -160,6 +160,14 @@ export default function HomeScreen() {
             <Text style={styles.topBarIcon}>🎨</Text>
           </TouchableOpacity>
           <TouchableOpacity
+            testID="account-button"
+            style={styles.topBarButton}
+            onPress={() => router.push('/account' as any)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.topBarIcon}>👤</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             testID="logout-button"
             style={styles.topBarButton}
             onPress={logout}

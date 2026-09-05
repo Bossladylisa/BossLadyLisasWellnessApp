@@ -482,6 +482,58 @@ async def logout(authorization: Optional[str] = Header(None)):
     return {"success": True}
 
 
+@api_router.delete("/auth/account")
+async def delete_account(user: dict = Depends(get_current_user)):
+    """
+    Permanently delete the caller's account and all associated personal data.
+    Required for Apple App Store review compliance (Guideline 5.1.1 v).
+    Deletes: user record, sessions, journal entries, life notes, tasks,
+    affirmations, moods, feedback, declutter state, user stats, AI usage.
+    Preserves anonymized moderation logs and Stripe events for legal/audit.
+    """
+    user_id = user["user_id"]
+
+    # Cancel Stripe subscription if active (best-effort)
+    sub_id = user.get("stripe_subscription_id")
+    if sub_id and stripe.api_key:
+        try:
+            stripe.Subscription.delete(sub_id)
+        except Exception as e:
+            logger.warning(f"Stripe subscription cancel failed for {user_id}: {e}")
+
+    # Delete personal data across all user-scoped collections
+    for coll in [
+        db.user_sessions,
+        db.journal_entries,
+        db.life_notes,
+        db.tasks,
+        db.affirmations,
+        db.mood_history,
+        db.feedback,
+        db.declutter_state,
+        db.user_stats,
+        db.ai_usage,
+    ]:
+        try:
+            await coll.delete_many({"user_id": user_id})
+        except Exception as e:
+            logger.warning(f"Delete cleanup failed for collection {coll.name}: {e}")
+
+    # Anonymize any moderation records that reference this admin
+    try:
+        await db.moderation_log.update_many(
+            {"admin_user_id": user_id},
+            {"$set": {"admin_user_id": "[deleted]", "admin_email": "[deleted]"}},
+        )
+    except Exception:
+        pass
+
+    # Finally, remove the user record itself
+    await db.users.delete_one({"user_id": user_id})
+
+    return {"success": True, "message": "Your account and personal data have been permanently deleted."}
+
+
 # ==================== ROOT ====================
 
 @api_router.get("/")
@@ -878,8 +930,20 @@ async def moderate_text(input: AIModerationRequest, user: dict = Depends(get_cur
 def validate_return_to(value: str) -> str:
     """Prevent open redirects."""
     parsed = urlparse(value)
-    allowed_schemes = {"exp", "exps", "myapp", "com.emergent.beautifyyourself.kms11o"}
-    allowed_hosts = {"beautify-yourself.preview.emergentagent.com", "localhost:8081", "localhost:19006"}
+    # Match schemes registered in frontend/app.json (scheme + iOS/Android bundle IDs)
+    allowed_schemes = {
+        "exp", "exps",                                    # Expo Go
+        "frontend",                                       # app.json "scheme"
+        "com.emergent.beautifyyourself.zek761",           # current iOS + Android bundle id
+        "com.emergent.beautifyyourself.kms11o",           # legacy bundle id (kept for backwards compat)
+        "myapp",                                          # legacy dev scheme
+    }
+    allowed_hosts = {
+        "beautify-yourself.preview.emergentagent.com",
+        "localhost:8081",
+        "localhost:19006",
+        "localhost:3000",
+    }
 
     if parsed.scheme in allowed_schemes:
         return value
