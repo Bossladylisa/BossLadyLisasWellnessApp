@@ -24,6 +24,8 @@ import {
   scheduleFocusSession,
   cancelAllReminders,
   requestPermissions,
+  notificationsSupported,
+  isExpoGo,
 } from '../src/utils/notifications';
 
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -199,7 +201,18 @@ export default function RhythmPage() {
           </View>
         )}
 
-        {permGranted === false && Platform.OS !== 'web' && (
+        {isExpoGo && Platform.OS !== 'web' && (
+          <View style={styles.infoBanner}>
+            <Text style={styles.infoText}>
+              📱 Sacred Rhythm needs a native build to fire real notifications. Expo Go
+              (SDK 53+) removed background notification support. Once your app is published
+              via the Emergent Publish button, reminders will schedule automatically on your
+              device.
+            </Text>
+          </View>
+        )}
+
+        {permGranted === false && notificationsSupported && (
           <View style={styles.warningBanner}>
             <Text style={styles.warningText}>
               ⚠️ Please enable notifications in your device settings to receive

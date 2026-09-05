@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useIconFonts } from '@/src/hooks/use-icon-fonts';
 import { useTheme, useThemeStore } from '../src/store/useTheme';
 import { useAuthStore } from '../src/store/useAuth';
+import { EmergencyLilyPad } from '../src/components/EmergencyLilyPad';
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
@@ -69,8 +70,18 @@ export default function RootLayout() {
             <Stack.Screen name="admin" options={{ title: 'Admin Dashboard' }} />
             <Stack.Screen name="upgrade" options={{ title: 'Upgrade to Premium' }} />
             <Stack.Screen name="rhythm" options={{ title: 'Sacred Rhythm' }} />
+            <Stack.Screen
+              name="lilypad"
+              options={{
+                headerShown: false,
+                presentation: 'modal',
+                animation: 'fade',
+              }}
+            />
+            <Stack.Screen name="account" options={{ title: 'Account' }} />
           </Stack>
         )}
+        <EmergencyLilyPad />
       </GestureHandlerRootView>
     </SafeAreaProvider>
   );
