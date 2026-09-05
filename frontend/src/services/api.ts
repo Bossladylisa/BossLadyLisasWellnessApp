@@ -74,9 +74,13 @@ export const api = {
 
   // Subscription
   getSubscription: async () => (await authFetch('/me/subscription')).json(),
-  createCheckout: async (returnTo: string) =>
+  createCheckout: async (returnTo: string, tier: 'blossom' | 'grove' = 'blossom') =>
     (await authFetch('/stripe/create-checkout-session', {
       method: 'POST',
-      body: JSON.stringify({ return_to: returnTo }),
+      body: JSON.stringify({ return_to: returnTo, tier }),
     })).json(),
+
+  // Welcome Week
+  startWelcomeWeek: async () =>
+    (await authFetch('/user/start-welcome-week', { method: 'POST', body: JSON.stringify({}) })).json(),
 };

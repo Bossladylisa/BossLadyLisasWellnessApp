@@ -1,0 +1,65 @@
+{
+  "summary": "Iteration 6 tests the new 3-tier subscription model (🌱 Sanctuary Seed / 🌸 Blossom Circle / 🦋 Sacred Grove) and opt-in Welcome Week. Wrote /app/backend/tests/test_subscription_tiers.py (27 tests, all PASS). Full suite 56/56 PASS after also re-running existing test_auth_and_protection.py (29 tests, zero regressions). The old test_ai_claude_integration.py (which referenced the removed FREE_DAILY_AI_LIMIT and expected old {used_today, daily_limit, remaining} shape) was deleted and superseded. Verified: (1) GET /ai/usage returns the new quota_state shape (tier, is_admin, unlimited, welcome_week_active, welcome_week_days_left, used_this_week, weekly_limit, weekly_remaining, used_this_month, monthly_limit, monthly_remaining, reason) for free / blossom / grove / admin; (2) legacy subscription_tier='premium' normalizes to 'blossom' both in /ai/usage and /me/subscription; (3) POST /user/start-welcome-week succeeds first time, sets welcome_week_start, then /ai/usage reports unlimited=true, welcome_week_active=true, days_left in [6,7]; second call returns 409; (4) During Welcome Week /ai/affirmation (x4 - more than the free weekly cap), /ai/reset (SSE stream), /ai/journal-insights all succeed without triggering 429; (5) Free tier (no Welcome Week) 4th /ai/affirmation returns 429 with detail containing 'weekly AI resets', 3rd succeeds, /ai/reset also 429s, /ai/moderate still 200s; (6) Blossom tier: pre-seeded monthly counter to 30 → 31st call returns 429 with 'Blossom Circle AI responses'; pre-seeded to 29 → 30th call succeeds; (7) POST /stripe/create-checkout-session with tier='blossom' AND tier='grove' returns real Stripe checkout_url (https://checkout.stripe.com/...) using the real price IDs from backend/.env; tier='invalid' → 400; blossom user asking for blossom → 409; grove user asking for grove → 409; blossom user asking for grove → 200 (valid upgrade path); (8) PATCH /admin/users/{user_id} with subscription_tier='grove' works, 'invalid' → 400, 'premium' normalized to 'blossom'; (9) GET /admin/stats returns blossom_users, grove_users, premium_users; (10) GET /me/subscription returns the documented shape; (11) /ai/moderate never bumps weekly or monthly counters. FOUND & FIXED one real MongoDB bug (see rca_of_issue). Frontend testing skipped per request.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "startup / db.ai_usage",
+        "issue": "The db.ai_usage collection had a leftover LEGACY unique index user_id_1_date_1 from the previous schema (before this iteration switched to composite key {user_id, period_type, period_key}). New docs never set the `date` field, so all upserts get `date=null` and the second period bucket insert (the 'month' bucket after the 'week' bucket, or vice versa) fails with pymongo.errors.DuplicateKeyError E11000. This silently broke _increment_ai_usage_all_buckets — every free/blossom user's quota was miscounted after their first AI call. Fixed in server.py create_indexes() by detecting and dropping the legacy index on startup. Also dropped it manually from the running test_database. Recommend deploying the same fix to prod DBs so no user is stuck with a stale index.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "/api/ai/journal-insights",
+        "issue": "Endpoint checks quota inline (duplicates enforce_ai_quota logic) — works, but the 'need data first' 400 path still costs the caller nothing (good), while the 429 path duplicates the exact same error strings as enforce_ai_quota. Consider factoring."
+      },
+      {
+        "endpoint": "server.py",
+        "issue": "File is now ~1120 lines. Recommend splitting into routers (auth/ai/stripe/admin/content) once feature-work settles."
+      },
+      {
+        "endpoint": "/api/admin/stats",
+        "issue": "premium_users key aggregates {blossom, grove, premium} which is fine for legacy compat, but the naming may confuse consumers. Blossom_users still uses {blossom, premium} for legacy compat — documented but worth noting."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_subscription_tiers.py",
+    "/app/backend/tests/test_auth_and_protection.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/pytest/subscription_tiers_results.xml"
+  ],
+  "action_items": [
+    "Verify the create_indexes() legacy-index migration I added lands in the running server (already restarted; logs confirm 'MongoDB indexes created'). For any prod-like environment, run once manually: db.ai_usage.dropIndex('user_id_1_date_1') to remove the stale schema.",
+    "Update /app/memory/test_credentials.md — it still describes the old 2-tier system ('Free' vs 'Premium $4.99'), old daily quota (3/day), and old rate-limit line for /ai/reset (10/hour → now 30/hour). Doc must reflect Sanctuary Seed / Blossom Circle / Sacred Grove and the Welcome Week opt-in.",
+    "Consider extracting server.py into routers now that it's >1000 lines.",
+    "Optional UX: journal-insights inline quota check duplicates enforce_ai_quota — consolidate to one helper."
+  ],
+  "critical_code_review_comments": [
+    "Great: _quota_state() normalizes 'premium' → 'blossom' via _normalized_tier, so legacy users transparently see the Blossom Circle experience without a migration script.",
+    "Great: enforce_ai_quota short-circuits before incrementing when unlimited (admin/grove/welcome_week) so those users never allocate a bucket doc.",
+    "Great: welcome_week_start comparison handles both str and datetime, and tz-naive fallbacks are treated as UTC.",
+    "Note: _increment_ai_usage_all_buckets writes to BOTH week and month buckets on every call, even for tiers that only need one. Harmless but wasteful — could gate by tier if perf matters.",
+    "Note: /stripe/create-checkout-session logs the raw exception message into the 500 response body (`Stripe error: {str(e)}`) — fine for dev but consider redacting in prod.",
+    "Note: /admin/stats.blossom_users includes 'premium' legacy users in the blossom count — intentional and documented; make sure the admin UI knows.",
+    "Note: The first-user-becomes-admin path now sets subscription_tier='grove' (was 'premium'). Verified in code path server.py:439.",
+    "Nit: welcome_week_days_left rounds up when there is any partial day left (delta.days + (1 if delta.seconds > 0 else 0)). That's why activating Welcome Week 'now' reports 7 days but activating it a moment later reports 6. Test allows either 6 or 7."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_subscription_tiers.py (new — 27 tests, full 3-tier coverage)",
+    "/app/backend/tests/test_ai_claude_integration.py (deleted — referenced removed FREE_DAILY_AI_LIMIT and old {used_today/daily_limit/remaining} shape)",
+    "/app/backend/server.py (create_indexes(): auto-drop legacy user_id_1_date_1 unique index on ai_usage during startup migration)"
+  ],
+  "success_rate": {"backend": "100% (56/56: 27 new subscription-tier + 29 existing auth/protection)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "All test users seeded directly into MongoDB (users + user_sessions) with TEST_TIER_ prefix; each test cleans up its own docs via _cleanup_user (users, user_sessions, ai_usage, journal_entries, mood_history). For blossom cap tests we also seed synthetic ai_usage docs at 29 and 30 to avoid making 30 real Claude calls per test. No production data touched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Re-run: `pytest /app/backend/tests/ -v` (uses MONGO_URL + DB_NAME from backend/.env). Full run ~22s (real Claude calls for affirmation/reset/insights via emergentintegrations). Constants that must match server.py: FREE_WEEKLY_AI_LIMIT=3, BLOSSOM_MONTHLY_AI_LIMIT=30, WELCOME_WEEK_DAYS=7. ai_usage compound key = {user_id, period_type, period_key}. If backend adds a new tier constant or migrates ai_usage schema again, update _seed_user_and_session and the pre-seeded monthly counter in TestBlossomMonthlyCap. Stripe price IDs are hardcoded in the test file to match backend/.env; if those rotate, update RETURN_TO + STRIPE_*_PRICE_ID at the top of test_subscription_tiers.py.",
+  "rca_of_issue": "RCA — Silent quota-counter breakage due to leftover unique index. Reproduction: (1) any free or blossom user makes their first AI call → _increment_ai_usage_all_buckets upserts into ai_usage with {period_type:'week', period_key:'YYYY-Www'}; no `date` field is set. Because the legacy unique index `user_id_1_date_1` (created by the previous schema) still existed, this first doc landed with date=null. (2) The SAME call then upserts a SECOND doc for {period_type:'month', period_key:'YYYY-mm'} — Mongo tries to insert (no matching filter) and hits DuplicateKeyError on (user_id, date=null). (3) Because motor propagates the exception up through the FastAPI dependency, subsequent enforce_ai_quota calls raise 500s. Mitigation: (a) manually dropped the stale index in test_database (mongosh dropIndex user_id_1_date_1), and (b) added a startup migration in server.py create_indexes() that detects & drops the legacy index before creating the new composite index, so any DB that still has it self-heals on next backend restart. Regression protection: test_blossom_31st_call_is_429 and test_free_4th_call_is_429_with_weekly_message both exercise the two-bucket upsert path and would have failed loudly against a database with the stale index."
+}

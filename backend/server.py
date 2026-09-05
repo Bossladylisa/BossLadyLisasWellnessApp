@@ -28,7 +28,10 @@ db = client[os.environ['DB_NAME']]
 
 # Stripe configuration
 stripe.api_key = os.environ.get('STRIPE_API_KEY', os.environ.get('STRIPE_SECRET_KEY', ''))
-STRIPE_PREMIUM_PRICE_ID = os.environ.get('STRIPE_PREMIUM_PRICE_ID', 'price_premium_placeholder')
+STRIPE_BLOSSOM_PRICE_ID = os.environ.get('STRIPE_BLOSSOM_PRICE_ID', '')
+STRIPE_GROVE_PRICE_ID = os.environ.get('STRIPE_GROVE_PRICE_ID', '')
+# Backwards-compat: legacy STRIPE_PREMIUM_PRICE_ID maps to Blossom
+STRIPE_PREMIUM_PRICE_ID = os.environ.get('STRIPE_PREMIUM_PRICE_ID', STRIPE_BLOSSOM_PRICE_ID)
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '')
 PUBLIC_API_URL = os.environ.get('PUBLIC_API_URL', 'https://beautify-yourself.preview.emergentagent.com')
 
@@ -57,7 +60,17 @@ async def create_indexes():
         await db.user_sessions.create_index("user_id")
         await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
         await db.stripe_events.create_index("event_id", unique=True)
-        await db.ai_usage.create_index([("user_id", 1), ("date", 1)], unique=True)
+        # Drop legacy ai_usage(user_id, date) unique index if it exists — new schema
+        # uses (user_id, period_type, period_key) and the old index would treat all
+        # new docs as date=null and cause DuplicateKeyError on the 2nd bucket insert.
+        try:
+            existing = await db.ai_usage.index_information()
+            if "user_id_1_date_1" in existing:
+                await db.ai_usage.drop_index("user_id_1_date_1")
+                logger.info("Dropped legacy ai_usage index user_id_1_date_1")
+        except Exception as ie:
+            logger.warning(f"Legacy ai_usage index cleanup skipped: {ie}")
+        await db.ai_usage.create_index([("user_id", 1), ("period_type", 1), ("period_key", 1)], unique=True)
         logger.info("MongoDB indexes created")
     except Exception as e:
         logger.warning(f"Index creation warning: {e}")
@@ -122,6 +135,7 @@ class AIModerationRequest(BaseModel):
 
 class CheckoutRequest(BaseModel):
     return_to: str
+    tier: Optional[str] = "blossom"  # 'blossom' or 'grove'
 
 class AdminUpdateUserRequest(BaseModel):
     is_admin: Optional[bool] = None
@@ -168,46 +182,194 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
 
 
 async def require_premium(user: dict = Depends(get_current_user)) -> dict:
-    """Require user to have premium subscription."""
-    if user.get("subscription_tier") != "premium" and not user.get("is_admin"):
+    """Require user to have blossom or grove subscription (or admin)."""
+    tier = _normalized_tier(user)
+    if tier not in {"blossom", "grove"} and not user.get("is_admin"):
         raise HTTPException(status_code=402, detail="Premium subscription required")
     return user
 
 
-# ==================== AI QUOTA HELPERS ====================
+async def require_grove(user: dict = Depends(get_current_user)) -> dict:
+    """Require Sacred Grove tier (or admin)."""
+    tier = _normalized_tier(user)
+    if tier != "grove" and not user.get("is_admin"):
+        raise HTTPException(status_code=402, detail="Sacred Grove tier required")
+    return user
 
-FREE_DAILY_AI_LIMIT = 3  # Free-tier users get 3 AI calls per day (across all AI features)
 
-async def _get_ai_usage_today(user_id: str) -> int:
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    doc = await db.ai_usage.find_one({"user_id": user_id, "date": today}, {"_id": 0, "count": 1})
+# ==================== TIER + AI QUOTA HELPERS ====================
+#
+# 🌱 Sanctuary Seed  (free)    → Welcome Week: 7 days unlimited AI
+#                                  After: 3 AI/week (resets Monday 00:00 UTC)
+# 🌸 Blossom Circle ($4.99)    → 30 AI/month (resets 1st of month UTC)
+# 🦋 Sacred Grove   ($14.99)   → Unlimited AI
+# 👑 Admin                      → Unlimited AI
+
+FREE_WEEKLY_AI_LIMIT = 3
+BLOSSOM_MONTHLY_AI_LIMIT = 30
+WELCOME_WEEK_DAYS = 7
+
+def _normalized_tier(user: dict) -> str:
+    """Return one of: free, blossom, grove. Migrate legacy 'premium' → 'blossom'."""
+    t = (user.get("subscription_tier") or "free").lower()
+    if t == "premium":
+        return "blossom"
+    if t in {"free", "blossom", "grove"}:
+        return t
+    return "free"
+
+def _is_in_welcome_week(user: dict) -> bool:
+    """True if user is still within their 7-day Welcome Week."""
+    start = user.get("welcome_week_start")
+    if not start:
+        return False
+    if isinstance(start, str):
+        try:
+            start = datetime.fromisoformat(start)
+        except Exception:
+            return False
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) < start + timedelta(days=WELCOME_WEEK_DAYS)
+
+def _welcome_week_days_left(user: dict) -> Optional[int]:
+    """Number of full days remaining in Welcome Week, or None if not active."""
+    start = user.get("welcome_week_start")
+    if not start:
+        return None
+    if isinstance(start, str):
+        try:
+            start = datetime.fromisoformat(start)
+        except Exception:
+            return None
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    end = start + timedelta(days=WELCOME_WEEK_DAYS)
+    now = datetime.now(timezone.utc)
+    if now >= end:
+        return 0
+    delta = end - now
+    return max(0, delta.days + (1 if delta.seconds > 0 else 0))
+
+def _current_week_key() -> str:
+    """ISO week key like '2026-W23' for weekly quota buckets."""
+    now = datetime.now(timezone.utc)
+    year, week, _ = now.isocalendar()
+    return f"{year}-W{week:02d}"
+
+def _current_month_key() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m")
+
+async def _get_weekly_ai_usage(user_id: str) -> int:
+    doc = await db.ai_usage.find_one(
+        {"user_id": user_id, "period_type": "week", "period_key": _current_week_key()},
+        {"_id": 0, "count": 1},
+    )
     return int(doc.get("count", 0)) if doc else 0
 
-async def _increment_ai_usage(user_id: str) -> int:
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    result = await db.ai_usage.find_one_and_update(
-        {"user_id": user_id, "date": today},
-        {"$inc": {"count": 1}, "$set": {"updated_at": datetime.now(timezone.utc)}},
-        upsert=True,
-        return_document=True,
+async def _get_monthly_ai_usage(user_id: str) -> int:
+    doc = await db.ai_usage.find_one(
+        {"user_id": user_id, "period_type": "month", "period_key": _current_month_key()},
+        {"_id": 0, "count": 1},
     )
-    return int(result.get("count", 1)) if result else 1
+    return int(doc.get("count", 0)) if doc else 0
+
+async def _increment_ai_usage_all_buckets(user_id: str) -> None:
+    """Increment both weekly and monthly usage counters."""
+    now = datetime.now(timezone.utc)
+    for period_type, period_key in [("week", _current_week_key()), ("month", _current_month_key())]:
+        await db.ai_usage.update_one(
+            {"user_id": user_id, "period_type": period_type, "period_key": period_key},
+            {"$inc": {"count": 1}, "$set": {"updated_at": now}},
+            upsert=True,
+        )
+
+async def _quota_state(user: dict) -> dict:
+    """
+    Compute the caller's current AI quota state without incrementing.
+    Returns:
+      {
+        tier: 'free'|'blossom'|'grove',
+        unlimited: bool,
+        welcome_week_active: bool,
+        welcome_week_days_left: int|None,
+        used_this_week: int|None,
+        weekly_limit: int|None,
+        weekly_remaining: int|None,
+        used_this_month: int|None,
+        monthly_limit: int|None,
+        monthly_remaining: int|None,
+        reason: str,   # human readable current-state reason
+      }
+    """
+    tier = _normalized_tier(user)
+    is_admin = bool(user.get("is_admin"))
+    in_welcome = _is_in_welcome_week(user)
+    days_left = _welcome_week_days_left(user) if in_welcome else None
+    unlimited = is_admin or tier == "grove" or in_welcome
+
+    state = {
+        "tier": tier,
+        "is_admin": is_admin,
+        "unlimited": unlimited,
+        "welcome_week_active": in_welcome,
+        "welcome_week_days_left": days_left,
+        "used_this_week": None,
+        "weekly_limit": None,
+        "weekly_remaining": None,
+        "used_this_month": None,
+        "monthly_limit": None,
+        "monthly_remaining": None,
+        "reason": "",
+    }
+
+    if unlimited:
+        if is_admin:
+            state["reason"] = "Admin · unlimited"
+        elif in_welcome:
+            state["reason"] = f"Welcome Week · {days_left} day(s) left of unlimited AI"
+        else:
+            state["reason"] = "Sacred Grove · unlimited"
+        return state
+
+    if tier == "free":
+        used_w = await _get_weekly_ai_usage(user["user_id"])
+        state["used_this_week"] = used_w
+        state["weekly_limit"] = FREE_WEEKLY_AI_LIMIT
+        state["weekly_remaining"] = max(0, FREE_WEEKLY_AI_LIMIT - used_w)
+        state["reason"] = f"Sanctuary Seed · {state['weekly_remaining']}/{FREE_WEEKLY_AI_LIMIT} AI this week"
+    elif tier == "blossom":
+        used_m = await _get_monthly_ai_usage(user["user_id"])
+        state["used_this_month"] = used_m
+        state["monthly_limit"] = BLOSSOM_MONTHLY_AI_LIMIT
+        state["monthly_remaining"] = max(0, BLOSSOM_MONTHLY_AI_LIMIT - used_m)
+        state["reason"] = f"Blossom Circle · {state['monthly_remaining']}/{BLOSSOM_MONTHLY_AI_LIMIT} AI this month"
+    return state
 
 async def enforce_ai_quota(user: dict = Depends(get_current_user)) -> dict:
     """
-    Free-tier users are limited to FREE_DAILY_AI_LIMIT AI calls per day.
-    Premium and admin users are unlimited.
-    Increments usage before returning.
+    Enforce and increment AI quota per the tier rules above.
+    Raises 429 if the caller has no allowance left.
     """
-    is_unlimited = user.get("subscription_tier") == "premium" or user.get("is_admin")
-    if not is_unlimited:
-        used = await _get_ai_usage_today(user["user_id"])
-        if used >= FREE_DAILY_AI_LIMIT:
+    state = await _quota_state(user)
+    if not state["unlimited"]:
+        if state["tier"] == "free" and (state["weekly_remaining"] or 0) <= 0:
             raise HTTPException(
                 status_code=429,
-                detail=f"Daily free AI limit reached ({FREE_DAILY_AI_LIMIT}/day). Upgrade to Premium for unlimited access.",
+                detail=(
+                    f"You've used your {FREE_WEEKLY_AI_LIMIT} weekly AI resets. "
+                    f"Refills Monday, or upgrade to keep flowing."
+                ),
             )
-    await _increment_ai_usage(user["user_id"])
+        if state["tier"] == "blossom" and (state["monthly_remaining"] or 0) <= 0:
+            raise HTTPException(
+                status_code=429,
+                detail=(
+                    f"You've used all {BLOSSOM_MONTHLY_AI_LIMIT} of this month's Blossom Circle AI responses. "
+                    f"Upgrade to Sacred Grove for unlimited."
+                ),
+            )
+    await _increment_ai_usage_all_buckets(user["user_id"])
     return user
 
 
@@ -284,7 +446,7 @@ async def create_session(payload: SessionCreate):
             "name": data.get("name"),
             "picture": data.get("picture"),
             "is_admin": is_first_user,  # First user is super-admin
-            "subscription_tier": "premium" if is_first_user else "free",
+            "subscription_tier": "grove" if is_first_user else "free",
             "created_at": now,
         }
         await db.users.insert_one(new_user)
@@ -548,15 +710,26 @@ async def update_user_stats(input: UserStatsUpdate, user: dict = Depends(require
 
 @api_router.get("/ai/usage")
 async def get_ai_usage(user: dict = Depends(get_current_user)):
-    """Return today's AI usage and daily limit for the current user."""
-    is_unlimited = user.get("subscription_tier") == "premium" or user.get("is_admin")
-    used = await _get_ai_usage_today(user["user_id"])
-    return {
-        "used_today": used,
-        "daily_limit": None if is_unlimited else FREE_DAILY_AI_LIMIT,
-        "unlimited": is_unlimited,
-        "remaining": None if is_unlimited else max(0, FREE_DAILY_AI_LIMIT - used),
-    }
+    """Return the caller's current AI quota state (tier, welcome week, weekly/monthly usage)."""
+    return await _quota_state(user)
+
+
+@api_router.post("/user/start-welcome-week")
+async def start_welcome_week(user: dict = Depends(get_current_user)):
+    """
+    Opt-in activation of Welcome Week (7 days unlimited AI).
+    Can only be activated once per account.
+    """
+    if user.get("welcome_week_start"):
+        raise HTTPException(status_code=409, detail="Welcome Week has already been started for this account.")
+    now = datetime.now(timezone.utc)
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"welcome_week_start": now}},
+    )
+    updated = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    state = await _quota_state(updated)
+    return {"user": updated, "quota": state}
 
 
 @api_router.post("/ai/reset")
@@ -617,15 +790,13 @@ async def generate_journal_insights(request: Request, user: dict = Depends(get_c
         raise HTTPException(status_code=400, detail="Not enough journal or mood data yet. Write a few entries first.")
 
     # Now that we have data, enforce/increment quota
-    is_unlimited = user.get("subscription_tier") == "premium" or user.get("is_admin")
-    if not is_unlimited:
-        used = await _get_ai_usage_today(user["user_id"])
-        if used >= FREE_DAILY_AI_LIMIT:
-            raise HTTPException(
-                status_code=429,
-                detail=f"Daily free AI limit reached ({FREE_DAILY_AI_LIMIT}/day). Upgrade to Premium for unlimited access.",
-            )
-    await _increment_ai_usage(user["user_id"])
+    state = await _quota_state(user)
+    if not state["unlimited"]:
+        if state["tier"] == "free" and (state["weekly_remaining"] or 0) <= 0:
+            raise HTTPException(status_code=429, detail=f"You've used your {FREE_WEEKLY_AI_LIMIT} weekly AI resets. Refills Monday, or upgrade to keep flowing.")
+        if state["tier"] == "blossom" and (state["monthly_remaining"] or 0) <= 0:
+            raise HTTPException(status_code=429, detail=f"You've used all {BLOSSOM_MONTHLY_AI_LIMIT} of this month's Blossom Circle AI responses. Upgrade to Sacred Grove for unlimited.")
+    await _increment_ai_usage_all_buckets(user["user_id"])
 
     entries_txt = "\n\n".join([f"[{e.get('time','')}] {e.get('text','')}" for e in entries]) or "(no journal entries)"
     moods_txt = ", ".join([m.get("mood","") for m in moods]) or "(no mood tracking)"
@@ -724,10 +895,21 @@ def validate_return_to(value: str) -> str:
 async def create_checkout_session(body: CheckoutRequest, user: dict = Depends(get_current_user)):
     return_to = validate_return_to(body.return_to)
 
-    if user.get("subscription_tier") == "premium":
-        raise HTTPException(status_code=409, detail="Already Premium")
+    # Resolve tier + price
+    requested_tier = (body.tier or "blossom").lower()
+    if requested_tier == "premium":
+        requested_tier = "blossom"  # backwards-compat
+    if requested_tier not in {"blossom", "grove"}:
+        raise HTTPException(status_code=400, detail="Invalid tier. Must be 'blossom' or 'grove'.")
 
-    if not stripe.api_key or not STRIPE_PREMIUM_PRICE_ID or STRIPE_PREMIUM_PRICE_ID.startswith("price_premium_placeholder"):
+    current_tier = _normalized_tier(user)
+    if current_tier == "grove":
+        raise HTTPException(status_code=409, detail="You already have Sacred Grove — the highest tier.")
+    if current_tier == "blossom" and requested_tier == "blossom":
+        raise HTTPException(status_code=409, detail="You're already on Blossom Circle. Upgrade to Sacred Grove for unlimited AI.")
+
+    price_id = STRIPE_GROVE_PRICE_ID if requested_tier == "grove" else STRIPE_BLOSSOM_PRICE_ID
+    if not stripe.api_key or not price_id or price_id.startswith("price_premium_placeholder"):
         raise HTTPException(status_code=500, detail="Stripe not configured. Contact support.")
 
     customer_id = user.get("stripe_customer_id")
@@ -748,12 +930,12 @@ async def create_checkout_session(body: CheckoutRequest, user: dict = Depends(ge
         session = stripe.checkout.Session.create(
             **customer_args,
             mode="subscription",
-            line_items=[{"price": STRIPE_PREMIUM_PRICE_ID, "quantity": 1}],
+            line_items=[{"price": price_id, "quantity": 1}],
             success_url=success_bridge,
             cancel_url=cancel_bridge,
             client_reference_id=user["user_id"],
-            metadata={"user_id": user["user_id"], "tier": "premium"},
-            subscription_data={"metadata": {"user_id": user["user_id"], "tier": "premium"}},
+            metadata={"user_id": user["user_id"], "tier": requested_tier},
+            subscription_data={"metadata": {"user_id": user["user_id"], "tier": requested_tier}},
         )
     except Exception as e:
         logger.error(f"Stripe checkout error: {e}")
@@ -765,7 +947,7 @@ async def create_checkout_session(body: CheckoutRequest, user: dict = Depends(ge
             {"$set": {"stripe_customer_id": session.customer}}
         )
 
-    return {"checkout_url": session.url}
+    return {"checkout_url": session.url, "tier": requested_tier}
 
 
 @api_router.get("/stripe/checkout-success")
@@ -780,9 +962,12 @@ async def checkout_cancel(return_to: str):
 
 @api_router.get("/me/subscription")
 async def subscription_status(user: dict = Depends(get_current_user)):
+    tier = _normalized_tier(user)
     return {
-        "subscription_tier": user.get("subscription_tier", "free"),
+        "subscription_tier": tier,
         "is_admin": user.get("is_admin", False),
+        "welcome_week_active": _is_in_welcome_week(user),
+        "welcome_week_days_left": _welcome_week_days_left(user) if _is_in_welcome_week(user) else None,
     }
 
 
@@ -812,15 +997,19 @@ async def stripe_webhook(request: Request, stripe_signature: Optional[str] = Hea
         if user_id:
             price = obj.get("items", {}).get("data", [{}])[0].get("price")
             price_id = price.get("id") if isinstance(price, dict) else price
-            active = (
-                event_type != "customer.subscription.deleted"
-                and obj.get("status") in {"active", "trialing"}
-                and price_id == STRIPE_PREMIUM_PRICE_ID
-            )
+
+            # Determine tier from price_id
+            new_tier = "free"
+            if event_type != "customer.subscription.deleted" and obj.get("status") in {"active", "trialing"}:
+                if price_id == STRIPE_GROVE_PRICE_ID:
+                    new_tier = "grove"
+                elif price_id == STRIPE_BLOSSOM_PRICE_ID:
+                    new_tier = "blossom"
+
             await db.users.update_one(
                 {"user_id": user_id},
                 {"$set": {
-                    "subscription_tier": "premium" if active else "free",
+                    "subscription_tier": new_tier,
                     "stripe_subscription_id": obj.get("id"),
                     "stripe_customer_id": obj.get("customer"),
                 }},
@@ -835,7 +1024,9 @@ async def stripe_webhook(request: Request, stripe_signature: Optional[str] = Hea
 async def get_admin_stats(admin: dict = Depends(require_admin)):
     return {
         "users": await db.users.count_documents({}),
-        "premium_users": await db.users.count_documents({"subscription_tier": "premium"}),
+        "premium_users": await db.users.count_documents({"subscription_tier": {"$in": ["blossom", "grove", "premium"]}}),
+        "blossom_users": await db.users.count_documents({"subscription_tier": {"$in": ["blossom", "premium"]}}),
+        "grove_users": await db.users.count_documents({"subscription_tier": "grove"}),
         "admins": await db.users.count_documents({"is_admin": True}),
         "journal_entries": await db.journal_entries.count_documents({}),
         "life_notes": await db.life_notes.count_documents({}),
@@ -855,6 +1046,15 @@ async def update_user(user_id: str, input: AdminUpdateUserRequest, admin: dict =
     update_data = {k: v for k, v in input.dict().items() if v is not None}
     if not update_data:
         raise HTTPException(status_code=400, detail="No update data")
+
+    # Normalize tier values (accept 'premium' as legacy alias for 'blossom')
+    if "subscription_tier" in update_data:
+        tier = update_data["subscription_tier"].lower()
+        if tier == "premium":
+            tier = "blossom"
+        if tier not in {"free", "blossom", "grove"}:
+            raise HTTPException(status_code=400, detail="Invalid tier. Must be free, blossom, or grove.")
+        update_data["subscription_tier"] = tier
 
     # Prevent an admin from demoting themselves if they are the last admin
     if input.is_admin is False:

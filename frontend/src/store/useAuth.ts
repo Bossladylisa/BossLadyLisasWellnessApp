@@ -11,7 +11,7 @@ export interface AppUser {
   name?: string;
   picture?: string;
   is_admin: boolean;
-  subscription_tier: 'free' | 'premium';
+  subscription_tier: 'free' | 'blossom' | 'grove' | 'premium';
 }
 
 interface AuthState {

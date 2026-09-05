@@ -94,15 +94,33 @@ export default function HomeScreen() {
   const router = useRouter();
   const theme = useTheme();
   const [themePickerVisible, setThemePickerVisible] = useState(false);
+  const [quota, setQuota] = useState<any | null>(null);
   const { user, logout } = useAuthStore();
 
   const features = useMemo(() => getFeatures(theme), [theme]);
   const styles = useMemo(() => makeStyles(theme), [theme]);
 
+  React.useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const { api } = await import('../src/services/api');
+        const q = await api.getAIUsage();
+        setQuota(q);
+      } catch {}
+    })();
+  }, [user?.user_id]);
+
   if (!user) return <Redirect href="/login" />;
 
-  const isPremium = user?.subscription_tier === 'premium' || user?.is_admin;
+  const tier = user?.subscription_tier;
+  const isPremium =
+    tier === 'blossom' || tier === 'grove' || tier === 'premium' || !!user?.is_admin;
   const PREMIUM_FEATURE_IDS = ['planner', 'declutter', 'affirmations', 'rhythm'];
+
+  const welcomeWeekActive = !!quota?.welcome_week_active;
+  const daysLeft = quota?.welcome_week_days_left ?? null;
+  const isLastDayOfWelcome = welcomeWeekActive && daysLeft === 1;
 
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
@@ -188,7 +206,33 @@ export default function HomeScreen() {
           {/* Feature Cards Grid */}
           <Text style={styles.sectionTitle}>Your Sanctuary Tools</Text>
 
-          {!isPremium && (
+          {isLastDayOfWelcome && !isPremium && (
+            <TouchableOpacity
+              onPress={() => router.push('/upgrade' as any)}
+              style={styles.lastDayCard}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.lastDayIcon}>🌟</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.lastDayTitle}>Last day of your Welcome Week</Text>
+                <Text style={styles.lastDayText}>
+                  Keep unlimited AI flowing — pick Blossom Circle or Sacred Grove before it ends
+                </Text>
+              </View>
+              <Text style={styles.lastDayArrow}>›</Text>
+            </TouchableOpacity>
+          )}
+
+          {welcomeWeekActive && !isLastDayOfWelcome && !isPremium && (
+            <View style={styles.welcomePill}>
+              <Text style={styles.welcomePillIcon}>✨</Text>
+              <Text style={styles.welcomePillText}>
+                Welcome Week · {daysLeft ?? 0} day{daysLeft === 1 ? '' : 's'} of unlimited AI left
+              </Text>
+            </View>
+          )}
+
+          {!isPremium && !welcomeWeekActive && (
             <TouchableOpacity
               testID="upgrade-banner"
               onPress={() => router.push('/upgrade' as any)}
@@ -198,10 +242,10 @@ export default function HomeScreen() {
               <Text style={styles.upgradeBannerIcon}>✨</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.upgradeBannerTitle}>
-                  Unlock Sacred Sanctuary
+                  Bloom into more
                 </Text>
                 <Text style={styles.upgradeBannerText}>
-                  AI Reset, Planner, Timer & more — $4.99/mo
+                  Blossom $4.99/mo · Sacred Grove $14.99/mo — or start your free Welcome Week
                 </Text>
               </View>
               <Text style={styles.upgradeBannerArrow}>›</Text>
@@ -380,6 +424,53 @@ const makeStyles = (theme: Theme) =>
       fontSize: 22,
       color: theme.gold,
       fontWeight: '600',
+    },
+    lastDayCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      backgroundColor: 'rgba(232,184,77,0.28)',
+      borderWidth: 2,
+      borderColor: theme.gold,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 16,
+    },
+    lastDayIcon: { fontSize: 26 },
+    lastDayTitle: {
+      fontSize: 14,
+      fontWeight: '800',
+      color: theme.goldLt,
+      marginBottom: 3,
+      letterSpacing: 0.3,
+    },
+    lastDayText: {
+      fontSize: 12,
+      color: theme.cream,
+      opacity: 0.9,
+      lineHeight: 17,
+    },
+    lastDayArrow: { fontSize: 22, color: theme.gold, fontWeight: '600' },
+    welcomePill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: 'rgba(212,168,67,0.12)',
+      borderWidth: 1,
+      borderColor: 'rgba(212,168,67,0.4)',
+      borderRadius: 999,
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      marginBottom: 16,
+      alignSelf: 'center',
+    },
+    welcomePillIcon: { fontSize: 14 },
+    welcomePillText: {
+      color: theme.goldLt,
+      fontSize: 12,
+      fontWeight: '600',
+      letterSpacing: 0.3,
     },
     cardTitleRow: {
       flexDirection: 'row',

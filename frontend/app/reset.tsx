@@ -34,11 +34,7 @@ export default function ResetToolkit() {
   const [aiCard, setAiCard] = useState<string>('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
-  const [usage, setUsage] = useState<{
-    remaining: number | null;
-    daily_limit: number | null;
-    unlimited: boolean;
-  } | null>(null);
+  const [usage, setUsage] = useState<any | null>(null);
   const [moodHistory, setMoodHistory] = useState<
     Array<{ mood: string; color: string }>
   >([]);
@@ -60,11 +56,7 @@ export default function ResetToolkit() {
   const loadUsage = async () => {
     try {
       const data = await api.getAIUsage();
-      setUsage({
-        remaining: data.remaining,
-        daily_limit: data.daily_limit,
-        unlimited: !!data.unlimited,
-      });
+      setUsage(data);
     } catch (e) {
       // silent
     }
@@ -141,11 +133,7 @@ export default function ResetToolkit() {
 
         {usage && (
           <View style={styles.usagePill}>
-            <Text style={styles.usagePillText}>
-              {usage.unlimited
-                ? '✨ Premium · Unlimited AI'
-                : `Free AI · ${usage.remaining ?? 0} of ${usage.daily_limit ?? 3} left today`}
-            </Text>
+            <Text style={styles.usagePillText}>{usage.reason || (usage.unlimited ? '✨ Unlimited AI' : '')}</Text>
             {!usage.unlimited && (
               <TouchableOpacity onPress={() => router.push('/upgrade' as any)}>
                 <Text style={styles.usagePillUpgrade}>Upgrade →</Text>
