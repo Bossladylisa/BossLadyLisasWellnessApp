@@ -8,7 +8,7 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { useRouter, Redirect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -34,6 +34,7 @@ export default function LoginScreen() {
     if (user) {
       router.replace('/' as any);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   // On web, process session_id from URL hash on mount
@@ -66,6 +67,7 @@ export default function LoginScreen() {
     };
 
     processWebSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleGoogleLogin = async () => {
@@ -78,9 +80,9 @@ export default function LoginScreen() {
           ? window.location.origin + '/login'
           : Linking.createURL('login');
 
-      const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(
-        redirectUrl
-      )}`;
+      const authOrigin =
+        process.env.EXPO_PUBLIC_EMERGENT_AUTH_ORIGIN || 'https://auth.emergentagent.com';
+      const authUrl = `${authOrigin}/?redirect=${encodeURIComponent(redirectUrl)}`;
 
       if (Platform.OS === 'web') {
         window.location.href = authUrl;
@@ -142,7 +144,7 @@ export default function LoginScreen() {
               <DragonflyIcon size={64} color={theme.goldLt} opacity={0.95} />
             </View>
 
-            <Text style={styles.brandText}>BossLadyLisa's℠</Text>
+            <Text style={styles.brandText}>BossLadyLisa’s℠</Text>
             <Text style={styles.titleLine1}>BEAUTIFY</Text>
             <Text style={styles.titleLine2}>Yourself</Text>
             <Text style={styles.titleLine3}>AND BEYOND</Text>
@@ -179,7 +181,7 @@ export default function LoginScreen() {
             </Text>
 
             <Text style={styles.footer}>
-              "We'll keep the light on for you."
+              “We’ll keep the light on for you.”
             </Text>
           </View>
         </ScrollView>

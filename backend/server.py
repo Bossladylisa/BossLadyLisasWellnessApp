@@ -33,10 +33,15 @@ STRIPE_GROVE_PRICE_ID = os.environ.get('STRIPE_GROVE_PRICE_ID', '')
 # Backwards-compat: legacy STRIPE_PREMIUM_PRICE_ID maps to Blossom
 STRIPE_PREMIUM_PRICE_ID = os.environ.get('STRIPE_PREMIUM_PRICE_ID', STRIPE_BLOSSOM_PRICE_ID)
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '')
-PUBLIC_API_URL = os.environ.get('PUBLIC_API_URL', 'https://beautify-yourself.preview.emergentagent.com')
+PUBLIC_API_URL = os.environ.get('PUBLIC_API_URL', '').rstrip('/')
+if not PUBLIC_API_URL:
+    logger.warning("PUBLIC_API_URL is not set — Stripe success/cancel redirects will fail at runtime. Set it in backend/.env before deploying.")
 
-# Emergent Auth
-EMERGENT_AUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
+# Emergent Auth (host configurable via env)
+EMERGENT_AUTH_URL = os.environ.get(
+    "EMERGENT_AUTH_URL",
+    "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+)
 
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
